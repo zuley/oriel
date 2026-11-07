@@ -69,10 +69,11 @@ public final class WindowBehaviorController {
         snapshot?.isVisible = !enabled || containsInclusive(pointer, in: state.frame.insetBy(dx: -12, dy: -12))
     }
 
-    public func samplePointer(_ pointer: CGPoint, for id: UUID) {
+    public func samplePointer(_ pointer: CGPoint, for id: UUID, editing: Bool = false) {
         guard let state = snapshot, state.id == id, state.automaticHiding,
               geometryWindowID != id else { return }
         defer { previousPointer = pointer }
+        if editing && state.isVisible && !state.isLocked { return }
         let outer = state.frame.insetBy(dx: -12, dy: -12)
         let inner = state.frame.insetBy(dx: 12, dy: 12)
         // Inner and outer boundaries belong to the wake zone. Only the strict

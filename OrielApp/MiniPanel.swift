@@ -14,6 +14,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         let close: () -> Void
         let frameChanged: (CGRect) -> Void
         let geometryInteractionChanged: (Bool) -> Void
+        var transparencyRecoveryChanged: (Bool) -> Void = { _ in }
     }
 
     private enum GeometryInteraction: Equatable {
@@ -64,14 +65,26 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private var selected: Tab
     private var nextTabNumber = 2
     private var geometryInteraction: GeometryInteraction?
+    private var resizeStart: (frame: NSRect, pointer: NSPoint)?
     private var dragCompletionTimer: Timer?
+    fileprivate weak var hoveredResizeHandle: PanelResizeHandle?
     private var lockRecoveryPanel: LockRecoveryPanel?
     private let settingsPanel = TransparencySettingsPanel()
     private var backgroundOpacity: Double = 0.75
     private var contentOpacity: Double = 0.75
+    private var revealingToolbar = false
     private var isDisposed = false
 
     var bodyFrame: NSRect { convertToScreen(chrome.convert(chrome.bounds, to: nil)) }
+
+    var hasEditingFocus: Bool {
+        guard isKeyWindow, let responder = firstResponder else { return false }
+        switch selected.page {
+        case .terminal: return responder === selected.terminal
+        case .stocks: return responder is NSTextInputClient
+        default: return false
+        }
+    }
 
     var keepsWindowVisible: Bool { settingsPanel.isVisible || stockChart.containsPointer }
 
@@ -91,10 +104,12 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         isMovable = true
         isMovableByWindowBackground = false
+        acceptsMouseMovedEvents = true
         contentMinSize = CGSize(width: min(frame.width, 120), height: min(frame.height, 90))
         isOpaque = false
         backgroundColor = .clear
         appearance = NSAppearance(named: .aqua)
+        animationBehavior = .none
         hasShadow = false
 
         chrome = MiniWindowChromeView(actions: .init(
@@ -113,7 +128,9 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         let shadowView = PanelShadowView(frame: NSRect(origin: .zero, size: frame.size))
         contentView = shadowView
         chrome.frame = shadowView.bodyRect
+        shadowView.chrome = chrome
         shadowView.addSubview(chrome)
+        shadowView.installResizeHandles()
         applyTransparency()
         refreshTabs()
         delegate = self
@@ -132,6 +149,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         watchlist.setVisible(state.isVisible && selected.page == .stocks)
         if !state.isVisible { chrome?.dismissTooltip() }
         if state.isLocked || !state.isVisible {
+            hoveredResizeHandle?.releaseCursor()
             stockChart.dismiss()
             if let terminal = selected.terminal, firstResponder === terminal { makeFirstResponder(nil) }
             settingsPanel.performClose(nil)
@@ -155,6 +173,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     func dispose() {
         guard !isDisposed else { return }
         isDisposed = true
+        hoveredResizeHandle?.releaseCursor()
         stockChart.dismiss()
         watchlist.setVisible(false)
         settingsPanel.performClose(nil)
@@ -193,6 +212,37 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         performDrag(with: event)
     }
 
+    fileprivate func startEdgeResize(_ event: NSEvent) {
+        guard !isDisposed, isVisible, !ignoresMouseEvents, geometryInteraction == nil else { return }
+        resizeStart = (frame, convertPoint(toScreen: event.locationInWindow))
+        beginGeometryInteraction(.resizing)
+    }
+
+    fileprivate func dragEdge(_ edge: PanelResizeEdge, event: NSEvent) {
+        guard let start = resizeStart else { return }
+        let pointer = convertPoint(toScreen: event.locationInWindow)
+        var rect = start.frame
+        let dx = pointer.x - start.pointer.x
+        let dy = pointer.y - start.pointer.y
+        if edge.contains(.left) {
+            rect.size.width = max(contentMinSize.width, start.frame.width - dx)
+            rect.origin.x = start.frame.maxX - rect.width
+        } else if edge.contains(.right) {
+            rect.size.width = max(contentMinSize.width, start.frame.width + dx)
+        }
+        if edge.contains(.bottom) {
+            rect.size.height = max(contentMinSize.height, start.frame.height - dy)
+            rect.origin.y = start.frame.maxY - rect.height
+        } else if edge.contains(.top) {
+            rect.size.height = max(contentMinSize.height, start.frame.height + dy)
+        }
+        if rect != frame { setFrame(rect, display: true) }
+    }
+
+    fileprivate func endEdgeResize() {
+        if resizeStart != nil { finishGeometryInteraction() }
+    }
+
     func windowDidMove(_ notification: Notification) {
         guard !isDisposed else { return }
         positionLockRecovery()
@@ -223,6 +273,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     }
 
     private func finishGeometryInteraction(reportFinalFrame: Bool = true, notify: Bool = true) {
+        resizeStart = nil
         dragCompletionTimer?.invalidate()
         dragCompletionTimer = nil
         guard geometryInteraction != nil else { return }
@@ -254,7 +305,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         }
         guard let recovery = lockRecoveryPanel else { return }
         positionLockRecovery()
-        recovery.alphaValue = alphaValue * backgroundOpacity
+        recovery.alphaValue = alphaValue
+        recovery.button.restingOpacity = backgroundOpacity
         if recovery.parent == nil { addChildWindow(recovery, ordered: .above) }
         if !recovery.isVisible { recovery.orderFrontRegardless() }
     }
@@ -437,7 +489,18 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
 
     private func applyTransparency() {
         (contentView as? PanelShadowView)?.shadowStrength = backgroundOpacity
-        chrome.setContentOpacity(background: backgroundOpacity, content: contentOpacity)
+        chrome.setContentOpacity(background: backgroundOpacity, content: contentOpacity, revealToolbar: revealingToolbar)
+    }
+
+    func revealTransparencySettings() {
+        revealingToolbar = true
+        applyTransparency()
+        settingsPanel.onDismiss = { [weak self] in
+            guard let self, !isDisposed else { return }
+            revealingToolbar = false
+            applyTransparency()
+        }
+        if !settingsPanel.isVisible { showSettings(from: chrome.settingsButton) }
     }
 
     private func showSettings(from sender: NSView) {
@@ -454,17 +517,182 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             self.backgroundOpacity = background
             self.contentOpacity = content
             self.applyTransparency()
+            self.actions.transparencyRecoveryChanged(max(background, content) <= 0.05)
         }
         settingsPanel.show(below: sender)
     }
 
 }
 
+private struct PanelResizeEdge: OptionSet {
+    let rawValue: Int
+    static let left = Self(rawValue: 1)
+    static let right = Self(rawValue: 2)
+    static let top = Self(rawValue: 4)
+    static let bottom = Self(rawValue: 8)
+
+    @MainActor var cursor: NSCursor {
+        if #available(macOS 15, *) {
+            let position: NSCursor.FrameResizePosition
+            switch self {
+            case .left: position = .left
+            case .right: position = .right
+            case .top: position = .top
+            case .bottom: position = .bottom
+            case [.left, .top]: position = .topLeft
+            case [.right, .top]: position = .topRight
+            case [.left, .bottom]: position = .bottomLeft
+            default: position = .bottomRight
+            }
+            return .frameResize(position: position, directions: .all)
+        }
+        if isDisjoint(with: [.left, .right]) { return .resizeUpDown }
+        if isDisjoint(with: [.top, .bottom]) { return .resizeLeftRight }
+        let rising = self == [.bottom, .left] || self == [.top, .right]
+        let source = NSCursor.resizeLeftRight.image
+        let size = NSSize(width: 32, height: 32)
+        let center = NSPoint(x: 16, y: 16)
+        let image = NSImage(size: size, flipped: false) { _ in
+            let transform = NSAffineTransform()
+            transform.translateX(by: center.x, yBy: center.y)
+            transform.rotate(byDegrees: rising ? 45 : -45)
+            transform.concat()
+            source.draw(in: NSRect(x: -source.size.width / 2, y: -source.size.height / 2,
+                                   width: source.size.width, height: source.size.height))
+            return true
+        }
+        return NSCursor(image: image, hotSpot: center)
+    }
+}
+
+/// WindowServer otherwise ignores cursor changes from an inactive menu-bar app.
+/// Resolve this optional connection property at runtime so normal AppKit cursor rects
+/// still work on systems without it. Enable it only during a resize hover.
+private enum BackgroundResizeCursor {
+    private typealias MainConnection = @convention(c) () -> Int32
+    private typealias SetProperty = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
+
+    static func allow(_ enabled: Bool) {
+        let symbols = UnsafeMutableRawPointer(bitPattern: -2) // RTLD_DEFAULT
+        guard let connectionFunction = dlsym(symbols, "CGSMainConnectionID"),
+              let propertyFunction = dlsym(symbols, "CGSSetConnectionProperty") else { return }
+        let connection = unsafeBitCast(connectionFunction, to: MainConnection.self)()
+        let setProperty = unsafeBitCast(propertyFunction, to: SetProperty.self)
+        _ = setProperty(connection, connection, "SetsCursorInBackground" as CFString,
+                        enabled ? kCFBooleanTrue : kCFBooleanFalse)
+    }
+}
+
+@MainActor
+private final class PanelResizeHandle: NSView {
+    let edge: PanelResizeEdge
+    private let resizeCursor: NSCursor
+
+    init(_ edge: PanelResizeEdge) {
+        self.edge = edge
+        resizeCursor = edge.cursor
+        super.init(frame: .zero)
+        setAccessibilityElement(false)
+        // Cursor rects are only active in a key window. This panel usually isn't key.
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.activeAlways, .inVisibleRect,
+            .mouseEnteredAndExited, .mouseMoved, .cursorUpdate], owner: self, userInfo: nil))
+    }
+
+    private func showCursor() {
+        guard let panel = window as? MiniPanel, panel.isVisible, !panel.ignoresMouseEvents else { return }
+        let point = superview?.convert(panel.mouseLocationOutsideOfEventStream, from: nil)
+        if let point, (superview as? PanelShadowView)?.hasControl(at: point) == true {
+            releaseCursor()
+            return
+        }
+        if panel.hoveredResizeHandle == nil { BackgroundResizeCursor.allow(true) }
+        panel.hoveredResizeHandle = self
+        resizeCursor.set()
+    }
+
+    func releaseCursor() {
+        guard let panel = window as? MiniPanel, panel.hoveredResizeHandle === self else { return }
+        panel.hoveredResizeHandle = nil
+        NSCursor.arrow.set()
+        BackgroundResizeCursor.allow(false)
+    }
+
+    override func mouseEntered(with event: NSEvent) { showCursor() }
+    override func mouseMoved(with event: NSEvent) { showCursor() }
+    override func mouseExited(with event: NSEvent) { releaseCursor() }
+    required init?(coder: NSCoder) { nil }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        switch NSApp.currentEvent?.type {
+        case .scrollWheel, .rightMouseDown, .rightMouseUp: return nil
+        default:
+            guard let hit = super.hitTest(point),
+                  (superview as? PanelShadowView)?.hasControl(at: point) != true else { return nil }
+            return hit
+        }
+    }
+    override func cursorUpdate(with event: NSEvent) { showCursor() }
+    override func mouseDown(with event: NSEvent) { (window as? MiniPanel)?.startEdgeResize(event) }
+    override func mouseDragged(with event: NSEvent) { (window as? MiniPanel)?.dragEdge(edge, event: event) }
+    override func mouseUp(with event: NSEvent) { (window as? MiniPanel)?.endEdgeResize() }
+}
+
 @MainActor
 private final class PanelShadowView: NSView {
+    weak var chrome: MiniWindowChromeView?
+
+    func hasControl(at point: NSPoint) -> Bool {
+        var view = chrome?.hitTest(point)
+        while let candidate = view {
+            if candidate is NSButton || candidate is NSScroller { return true }
+            view = candidate.superview
+        }
+        return false
+    }
+
     var bodyRect: NSRect { bounds.insetBy(dx: 4, dy: 4) }
     var shadowStrength: CGFloat = 1 {
         didSet { needsDisplay = true }
+    }
+
+    private var handles: [PanelResizeHandle] = []
+
+    func installResizeHandles() {
+        let edges: [PanelResizeEdge] = [.left, .right, .top, .bottom,
+                                        [.top, .left], [.top, .right], [.bottom, .left], [.bottom, .right]]
+        handles = edges.map(PanelResizeHandle.init)
+        handles.forEach { addSubview($0) }
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let corner: CGFloat = 20
+        let band: CGFloat = 14
+        let topBand: CGFloat = 12
+        let toolbarBottom = bodyRect.maxY - 28
+        for handle in handles {
+            let edge = handle.edge
+            let left = edge.contains(.left), right = edge.contains(.right)
+            let top = edge.contains(.top), bottom = edge.contains(.bottom)
+            let isCorner = (left || right) && (top || bottom)
+            let width = isCorner ? corner : (left || right ? band : bounds.width - 2 * corner)
+            let x = left ? bounds.minX : (right ? bounds.maxX - width : bounds.minX + corner)
+            let y: CGFloat
+            let height: CGFloat
+            if top {
+                height = topBand
+                y = bounds.maxY - height
+            } else if bottom {
+                height = isCorner ? corner : band
+                y = bounds.minY
+            } else {
+                // Keep the sides of the toolbar free for the traffic lights and lock.
+                y = bounds.minY + corner
+                height = toolbarBottom - y
+            }
+            handle.frame = NSRect(x: x, y: y, width: width, height: height)
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -483,10 +711,14 @@ private final class PanelShadowView: NSView {
 
 @MainActor
 private final class LockRecoveryPanel: NSPanel {
+    let button: ChromeButton
+
     init(unlock: @escaping () -> Void) {
+        button = MiniWindowChromeView.makeLockRecoveryControl(unlock: unlock)
         super.init(contentRect: NSRect(x: 0, y: 0, width: 28, height: 28),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         title = "取消穿透"
+        animationBehavior = .none
         isReleasedWhenClosed = false
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = true
@@ -499,7 +731,7 @@ private final class LockRecoveryPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = false
         appearance = NSAppearance(named: .aqua)
-        contentView = MiniWindowChromeView.makeLockRecoveryControl(unlock: unlock)
+        contentView = button
     }
 
     override var canBecomeKey: Bool { false }
@@ -510,6 +742,7 @@ private final class LockRecoveryPanel: NSPanel {
 /// A small anchored panel gives the compact settings a controlled corner radius.
 @MainActor
 private final class TransparencySettingsPanel: NSPanel {
+    var onDismiss: (() -> Void)?
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var activationObserver: NSObjectProtocol?
@@ -586,6 +819,8 @@ private final class TransparencySettingsPanel: NSPanel {
         activationObserver = nil
         parent?.removeChildWindow(self)
         orderOut(nil)
+        onDismiss?()
+        onDismiss = nil
     }
 }
 

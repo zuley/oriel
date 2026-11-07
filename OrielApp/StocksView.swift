@@ -3,6 +3,7 @@ import SwiftUI
 struct StocksView: View {
     @ObservedObject var list: StockWatchlist
     var onStockHover: (StockSymbol, Bool) -> Void = { _, _ in }
+    @State private var compactSymbolID: String?
     @State private var query = ""
     @State private var matches: [StockSymbol] = []
     @State private var searchStatus = ""
@@ -36,6 +37,42 @@ struct StocksView: View {
     }
 
     var body: some View {
+        GeometryReader { area in
+            if area.size.height < 120 || area.size.width < 210 {
+                compactQuote
+            } else {
+                fullList
+            }
+        }
+    }
+
+    private var compactQuote: some View {
+        let symbols = list.symbols.isEmpty ? [StockSymbol.index] : list.symbols
+        let symbol = symbols.first { $0.id == compactSymbolID } ?? symbols[0]
+        let quote = list.quotes[symbol.id]
+        let percent = quote.map { signed($0.percent) + "%" } ?? "—"
+        let change = Double(quote?.percent ?? "") ?? 0
+        return VStack(alignment: .leading, spacing: 0) {
+            Menu(symbol.name) {
+                ForEach(symbols) { item in
+                    Button(item.name) { compactSymbolID = item.id }
+                }
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden)
+            .fixedSize(horizontal: false, vertical: true)
+            .font(.system(size: 10, weight: .medium))
+            HStack(spacing: 4) {
+                Text(quote?.price ?? "—")
+                Text(percent).foregroundStyle(change > 0 ? up : change < 0 ? down : Color.primary)
+            }
+            .font(.system(size: 10)).monospacedDigit()
+        }
+        .lineLimit(1).minimumScaleFactor(0.8)
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private var fullList: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 HStack(spacing: 5) {

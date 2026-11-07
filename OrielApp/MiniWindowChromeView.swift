@@ -24,10 +24,10 @@ final class MiniWindowChromeView: NSView {
     private let tabBar: WindowTabBar
     private let dragAction: (NSEvent) -> Void
     private let automaticHidingButton: ChromeButton
+    let settingsButton: ChromeButton
     private let lockButton: ChromeButton
     private var toolbarButtons: [ChromeButton] = []
     private var isLocked = false
-    private var backgroundOpacity: CGFloat = 1
     private let hoverTip = ChromeTooltipView(frame: .zero)
     private var hoverTimer: Timer?
     private weak var hoveredButton: ChromeButton?
@@ -43,6 +43,7 @@ final class MiniWindowChromeView: NSView {
             actions.toggleAutomaticHiding()
         }
         lockButton = ChromeButton(symbol: .lock, label: "锁定穿透") { _ in actions.toggleLock() }
+        settingsButton = ChromeButton(symbol: .settings, label: "设置", action: actions.settings)
         super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 360))
 
         home.onOpenTerminal = actions.openTerminal
@@ -54,10 +55,9 @@ final class MiniWindowChromeView: NSView {
         layer?.masksToBounds = true
         autoresizingMask = [.width, .height]
 
-        let settings = ChromeButton(symbol: .settings, label: "设置", action: actions.settings)
         let hide = ChromeButton(symbol: .minus, label: "收起到菜单栏") { _ in actions.hide() }
         let close = ChromeButton(symbol: .close, label: "关闭小窗") { _ in actions.close() }
-        toolbarButtons = [addTab, automaticHidingButton, settings, lockButton, hide, close]
+        toolbarButtons = [addTab, automaticHidingButton, settingsButton, lockButton, hide, close]
         for button in toolbarButtons {
             button.onHover = { [weak self, weak button] entered in
                 guard let self, let button else { return }
@@ -92,7 +92,7 @@ final class MiniWindowChromeView: NSView {
             narrow ? 24 : 34, narrow ? 8 : 16
         ]
         for (button, center) in zip(toolbarButtons, centers) {
-            button.isHidden = center == nil
+            button.isHidden = center == nil || (isLocked && button === lockButton)
             if let center {
                 let width: CGFloat = button.isWindowControl ? (narrow ? 16 : 18) : (narrow && button !== lockButton ? 16 : 28)
                 button.frame = NSRect(x: center - width / 2, y: 0, width: width, height: 28)
@@ -179,12 +179,11 @@ final class MiniWindowChromeView: NSView {
         if view.superview !== surfaceHost { surfaceHost.subviews = [view] }
     }
 
-    func setContentOpacity(background: CGFloat, content: CGFloat) {
-        backgroundOpacity = background
+    func setContentOpacity(background: CGFloat, content: CGFloat, revealToolbar: Bool = false) {
         tabBar.alphaValue = background
         layer?.backgroundColor = ChromePalette.background.withAlphaComponent(background).cgColor
         for button in toolbarButtons {
-            button.alphaValue = isLocked && button === lockButton ? 0 : background
+            button.restingOpacity = revealToolbar ? 1 : background
         }
         self.content.alphaValue = content
         surfaceHost.alphaValue = content
@@ -196,12 +195,12 @@ final class MiniWindowChromeView: NSView {
             dismissTooltip()
             self.isLocked = isLocked
             tabBar.setEnabled(!isLocked)
+            home.setActionsEnabled(!isLocked)
             // The recovery child draws the lock while locked; never composite two copies.
-            lockButton.alphaValue = isLocked ? 0 : backgroundOpacity
+            lockButton.isHidden = isLocked
             needsLayout = true
         }
         for button in toolbarButtons { button.isEnabled = !isLocked }
-        lockButton.isEnabled = true
         automaticHidingButton.setActive(automaticHiding,
                                        label: automaticHiding ? "关闭边缘唤醒" : "开启边缘唤醒")
         lockButton.setActive(isLocked, label: isLocked ? "解除锁定穿透" : "锁定穿透")
@@ -212,7 +211,7 @@ final class MiniWindowChromeView: NSView {
         return NSRect(x: center - 14, y: 0, width: 28, height: 28)
     }
 
-    static func makeLockRecoveryControl(unlock: @escaping () -> Void) -> NSButton {
+    static func makeLockRecoveryControl(unlock: @escaping () -> Void) -> ChromeButton {
         let button = ChromeButton(symbol: .lock, label: "取消穿透") { _ in unlock() }
         button.frame = NSRect(x: 0, y: 0, width: 28, height: 28)
         button.setActive(true, label: "取消穿透")
@@ -229,10 +228,11 @@ final class MiniWindowChromeView: NSView {
 
     private func scheduleTooltip(for button: ChromeButton) {
         dismissTooltip()
+        guard button.isEnabled else { return }
         hoveredButton = button
         let timer = Timer(timeInterval: 0.3, repeats: false) { [weak self, weak button] _ in
             MainActor.assumeIsolated {
-                guard let self, let button, self.hoveredButton === button,
+                guard let self, let button, button.isEnabled, self.hoveredButton === button,
                       !button.isHidden, self.window?.isVisible == true else { return }
                 self.hoverTimer = nil
                 let size = self.hoverTip.configure(button.hintText)
@@ -498,7 +498,6 @@ private final class ChromeHomeView: NSView {
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
         terminalButton.font = .systemFont(ofSize: 11)
         terminalButton.setAccessibilityLabel("终端")
-        terminalButton.toolTip = "打开终端"
         terminalButton.target = self
         terminalButton.action = #selector(openTerminal)
         addSubview(terminalButton)
@@ -509,10 +508,17 @@ private final class ChromeHomeView: NSView {
         stockButton.font = terminalButton.font
         stockButton.symbol = .stocks
         stockButton.setAccessibilityLabel("自选股")
-        stockButton.toolTip = "打开自选股"
         stockButton.target = self
         stockButton.action = #selector(openStocks)
         addSubview(stockButton)
+        setActionsEnabled(true)
+    }
+
+    func setActionsEnabled(_ enabled: Bool) {
+        for button in [terminalButton, stockButton] {
+            button.isEnabled = enabled
+            button.toolTip = enabled ? "打开" + button.title : nil
+        }
     }
 
     required init?(coder: NSCoder) { nil }
@@ -641,11 +647,19 @@ private final class HomeTileButton: NSButton {
 }
 
 @MainActor
-private final class ChromeButton: NSButton {
+final class ChromeButton: NSButton {
     private let symbol: ChromeSymbol
     private let onPress: (NSView) -> Void
     private var tracking: NSTrackingArea?
     private var hovered = false
+    var restingOpacity: CGFloat = 1 {
+        didSet { needsDisplay = true }
+    }
+    override var isEnabled: Bool {
+        didSet { needsDisplay = true }
+    }
+    var iconOpacity: CGFloat { hovered && isEnabled ? 1 : restingOpacity }
+
     private var active = false
     var onHover: ((Bool) -> Void)?
     private(set) var hintText = ""
@@ -654,7 +668,7 @@ private final class ChromeButton: NSButton {
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { isEnabled }
 
-    init(symbol: ChromeSymbol, label: String, action: @escaping (NSView) -> Void) {
+    fileprivate init(symbol: ChromeSymbol, label: String, action: @escaping (NSView) -> Void) {
         self.symbol = symbol
         onPress = action
         super.init(frame: .zero)
@@ -725,6 +739,16 @@ private final class ChromeButton: NSButton {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        // Fade only the artwork so even an invisible icon keeps its tracking area.
+        let opacity = iconOpacity
+        guard opacity > 0, let context = NSGraphicsContext.current?.cgContext else { return }
+        context.saveGState()
+        context.setAlpha(opacity)
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        defer {
+            context.endTransparencyLayer()
+            context.restoreGState()
+        }
         let highlightedLock = isEnabled && active && symbol == .lock
         if symbol == .minus || symbol == .close {
             drawTrafficLight()

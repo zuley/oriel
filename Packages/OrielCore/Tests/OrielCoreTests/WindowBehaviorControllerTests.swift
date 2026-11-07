@@ -5,6 +5,22 @@ import OrielCore
 
 final class WindowBehaviorControllerTests: XCTestCase {
     @MainActor
+    func testEditingKeepsVisibleUntilFocusLeavesButCannotOverrideLock() async {
+        let controller = WindowBehaviorController()
+        let id = controller.create(frame: CGRect(x: 100, y: 100, width: 320, height: 240))
+        let outside = CGPoint(x: 70, y: 180)
+        controller.setAutomaticHiding(true, pointer: CGPoint(x: 140, y: 140))
+        controller.samplePointer(outside, for: id, editing: true)
+        XCTAssertEqual(controller.snapshot?.isVisible, true)
+        controller.samplePointer(outside, for: id)
+        XCTAssertEqual(controller.snapshot?.isVisible, false)
+        controller.samplePointer(CGPoint(x: 102, y: 150), for: id)
+        controller.setLocked(true)
+        controller.samplePointer(outside, for: id, editing: true)
+        XCTAssertEqual(controller.snapshot?.isVisible, false)
+    }
+
+    @MainActor
     func testOrdinaryLockingPreservesPointerHistoryForFastEntry() async {
         let controller = WindowBehaviorController()
         let id = controller.create(frame: CGRect(x: 100, y: 100, width: 320, height: 480))

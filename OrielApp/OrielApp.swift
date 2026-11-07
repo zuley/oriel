@@ -7,7 +7,10 @@ struct OrielApp: App {
     var body: some Scene {
         MenuBarExtra {
             if let window = model.snapshot {
-                if window.isLocked || !window.isVisible {
+                if model.needsTransparencyRecovery {
+                    Button("找回小窗") { model.findWindow() }
+                    Divider()
+                } else if window.isLocked || !window.isVisible {
                     Button("恢复小窗") { model.recover() }
                     Divider()
                 }

@@ -6,9 +6,13 @@ import OrielTerminal
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var snapshot: WindowSnapshot?
+    @Published private(set) var needsTransparencyRecovery = false
     private let behavior = WindowBehaviorController()
     private var panel: MiniPanel?
     private var sampler: Timer?
+    private var pendingMotionSample: Timer?
+    private var localMotionMonitor: Any?
+    private var globalMotionMonitor: Any?
     private var sampledWindowID: UUID?
     private var terminationObserver: NSObjectProtocol?
 
@@ -55,6 +59,10 @@ final class AppModel: ObservableObject {
             frameChanged: { [weak self] frame in self?.windowFrameChanged(frame, for: id) },
             geometryInteractionChanged: { [weak self] active in
                 self?.geometryInteractionChanged(active, for: id)
+            },
+            transparencyRecoveryChanged: { [weak self] needed in
+                guard let self, snapshot?.id == id, needsTransparencyRecovery != needed else { return }
+                needsTransparencyRecovery = needed
             }
         ))
         if let panel { behavior.updateFrame(panel.bodyFrame, for: id) }
@@ -93,6 +101,11 @@ final class AppModel: ObservableObject {
         synchronize()
     }
 
+    func findWindow() {
+        recover()
+        panel?.revealTransparencySettings()
+    }
+
     func hide() {
         behavior.hide()
         synchronize()
@@ -103,6 +116,7 @@ final class AppModel: ObservableObject {
         behavior.close()
         panel?.dispose()
         panel = nil
+        needsTransparencyRecovery = false
         synchronize()
     }
 
@@ -125,20 +139,52 @@ final class AppModel: ObservableObject {
         stopSampling()
         let id = current.id
         sampledWindowID = id
-        let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] _ in
-            // Scheduled exclusively on the main run loop; all state and AppKit access stay here.
-            MainActor.assumeIsolated {
-                guard let self, self.panel?.keepsWindowVisible != true else { return }
-                self.behavior.samplePointer(NSEvent.mouseLocation, for: id)
-                self.synchronize()
-            }
+        let motion: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+        globalMotionMonitor = NSEvent.addGlobalMonitorForEvents(matching: motion) { [weak self] _ in
+            self?.scheduleMotionSample(for: id)
         }
-        timer.tolerance = 0.005
+        localMotionMonitor = NSEvent.addLocalMonitorForEvents(matching: motion) { [weak self] event in
+            self?.scheduleMotionSample(for: id)
+            return event
+        }
+        // A slow fallback catches focus changes and missed motion events while idle.
+        // Keep the original cadence if either event monitor could not be installed.
+        let interval = globalMotionMonitor != nil && localMotionMonitor != nil ? 0.25 : 0.03
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.samplePointer(for: id) }
+        }
+        timer.tolerance = interval * 0.1
         RunLoop.main.add(timer, forMode: .common)
         sampler = timer
+        scheduleMotionSample(for: id)
+    }
+
+    private func scheduleMotionSample(for id: UUID) {
+        guard sampledWindowID == id, pendingMotionSample == nil else { return }
+        let timer = Timer(timeInterval: 0.025, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.sampledWindowID == id else { return }
+                self.pendingMotionSample = nil
+                self.samplePointer(for: id)
+            }
+        }
+        pendingMotionSample = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func samplePointer(for id: UUID) {
+        guard sampledWindowID == id, let panel, !panel.keepsWindowVisible else { return }
+        behavior.samplePointer(NSEvent.mouseLocation, for: id, editing: panel.hasEditingFocus)
+        synchronize()
     }
 
     private func stopSampling() {
+        if let localMotionMonitor { NSEvent.removeMonitor(localMotionMonitor) }
+        if let globalMotionMonitor { NSEvent.removeMonitor(globalMotionMonitor) }
+        localMotionMonitor = nil
+        globalMotionMonitor = nil
+        pendingMotionSample?.invalidate()
+        pendingMotionSample = nil
         sampler?.invalidate()
         sampler = nil
         sampledWindowID = nil

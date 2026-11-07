@@ -47,20 +47,33 @@ final class StockChartHover: ObservableObject {
         failed = false
         cache = cache.filter { $0.value.expires > Date() }
         let key = symbol.id + ":" + period.rawValue
-        series = cache[key]?.series
-        guard series == nil else { return }
+        let cached = cache[key]
+        series = cached?.series
+        if cached != nil && period == .daily { return }
         task = Task { [weak self, quote] in
-            do {
-                let result: Series
-                switch period {
-                case .intraday: result = .intraday(try await TencentMarket.intraday(for: symbol, quote: quote))
-                case .daily: result = .daily(try await TencentMarket.dailyCandles(for: symbol, quote: quote))
+            var delay = cached?.expires.timeIntervalSinceNow ?? 0
+            while !Task.isCancelled {
+                do {
+                    if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+                    try Task.checkCancellation()
+                    let result: Series
+                    switch period {
+                    case .intraday: result = .intraday(try await TencentMarket.intraday(for: symbol, quote: quote))
+                    case .daily: result = .daily(try await TencentMarket.dailyCandles(for: symbol, quote: quote))
+                    }
+                    try Task.checkCancellation()
+                    guard let self else { return }
+                    delay = period == .intraday ? 30 : 300
+                    self.cache[key] = (Date().addingTimeInterval(delay), result)
+                    self.series = result
+                    self.failed = false
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    self?.series = nil
+                    self?.failed = true
+                    delay = 30
                 }
-                try Task.checkCancellation()
-                self?.cache[key] = (Date().addingTimeInterval(30), result)
-                self?.series = result
-            } catch {
-                if !Task.isCancelled { self?.failed = true }
+                if period == .daily { return }
             }
         }
     }
