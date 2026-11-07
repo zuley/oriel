@@ -8,6 +8,8 @@ final class MiniWindowChromeView: NSView {
         var selectTab: (Int) -> Void
         var closeTab: (Int) -> Void
         var openTerminal: () -> Void = {}
+        var openNovel: () -> Void = {}
+        var dropNovel: ([URL]) -> Bool = { _ in false }
         var openStocks: () -> Void = {}
         var toggleAutomaticHiding: () -> Void
         var settings: (NSView) -> Void
@@ -47,6 +49,8 @@ final class MiniWindowChromeView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 360))
 
         home.onOpenTerminal = actions.openTerminal
+        home.onOpenNovel = actions.openNovel
+        home.onDropNovel = actions.dropNovel
         home.onOpenStocks = actions.openStocks
         appearance = NSAppearance(named: .aqua)
         wantsLayer = true
@@ -165,7 +169,7 @@ final class MiniWindowChromeView: NSView {
         showSurface(terminal, inset: 4, background: .black)
     }
 
-    func showStocks(_ view: NSView) {
+    func showReadingSurface(_ view: NSView) {
         showSurface(view, inset: 0, background: .clear)
     }
 
@@ -264,6 +268,7 @@ private final class WindowTabBar: NSView {
         picker.isBordered = false
         picker.font = .systemFont(ofSize: 11)
         picker.setAccessibilityLabel("选择页签")
+        picker.setAccessibilityHelp("展开所有页签，Control-Tab 切换到下一页")
         picker.target = self
         picker.action = #selector(selectMenuItem)
     }
@@ -297,20 +302,40 @@ private final class WindowTabBar: NSView {
 
     override func layout() {
         super.layout()
-        let total = chips.reduce(CGFloat(0)) { $0 + $1.preferredWidth + 3 } - 3
-        let overflow = total > bounds.width
+        guard let selected = chips.firstIndex(where: { $0.number == selectedNumber }) else { return }
+        let spacing: CGFloat = 3
+        let widths = chips.map(\.preferredWidth)
+        let overflow = widths.reduce(0, +) + spacing * CGFloat(chips.count - 1) > bounds.width
         picker.isHidden = !overflow
-        var x: CGFloat = 0
-        for chip in chips {
-            chip.isHidden = overflow && chip.number != selectedNumber
-            guard !chip.isHidden else { continue }
-            let width = overflow ? min(bounds.width, max(chip.preferredWidth + 18, 100)) : chip.preferredWidth
-            chip.frame = NSRect(x: x, y: 1, width: width, height: 22)
-            chip.titleButton.isHidden = overflow
-            if overflow {
-                picker.frame = NSRect(x: x, y: 1, width: width - TabChip.closeWidth, height: 22)
+
+        // Keep nearby tabs directly clickable. The selected tab's picker includes every tab.
+        var visible = Set(chips.indices)
+        var activeWidth = widths[selected]
+        if overflow {
+            activeWidth = min(bounds.width, max(widths[selected] + 18, 100))
+            visible = [selected]
+            var remaining = bounds.width - activeWidth
+            let neighbors = chips.indices.sorted {
+                let lhs = abs($0 - selected), rhs = abs($1 - selected)
+                return lhs == rhs ? $0 < $1 : lhs < rhs
             }
-            x += width + 3
+            for index in neighbors where index != selected && widths[index] + spacing <= remaining {
+                visible.insert(index)
+                remaining -= widths[index] + spacing
+            }
+        }
+        var x: CGFloat = 0
+        for (index, chip) in chips.enumerated() {
+            chip.isHidden = !visible.contains(index)
+            guard !chip.isHidden else { continue }
+            let usesPicker = overflow && index == selected
+            let width = index == selected ? activeWidth : widths[index]
+            chip.frame = NSRect(x: x, y: 1, width: width, height: 22)
+            chip.titleButton.isHidden = usesPicker
+            if usesPicker {
+                picker.frame = NSRect(x: x, y: 1, width: max(0, width - TabChip.closeWidth), height: 22)
+            }
+            x += width + spacing
         }
     }
 
@@ -331,7 +356,7 @@ private final class TabChip: NSView {
     private let select: (Int) -> Void
     private let close: (Int) -> Void
     private let selected: Bool
-    var preferredWidth: CGFloat { ceil(titleButton.intrinsicContentSize.width) + Self.closeWidth + 10 }
+    var preferredWidth: CGFloat { min(144, ceil(titleButton.intrinsicContentSize.width) + Self.closeWidth + 10) }
 
     init(number: Int, title: String, selected: Bool,
          select: @escaping (Int) -> Void, close: @escaping (Int) -> Void) {
@@ -343,6 +368,7 @@ private final class TabChip: NSView {
         wantsLayer = true
         layer?.cornerRadius = 5
         titleButton.title = title
+        titleButton.cell?.lineBreakMode = .byTruncatingTail
         titleButton.font = .systemFont(ofSize: 11, weight: selected ? .semibold : .regular)
         titleButton.setAccessibilityValue(selected)
         closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: nil)?
@@ -466,12 +492,14 @@ private final class ChromeClippingView: NSView {
 @MainActor
 private final class ChromeHomeView: NSView {
     var onOpenTerminal: (() -> Void)?
+    var onOpenNovel: (() -> Void)?
+    var onDropNovel: (([URL]) -> Bool)?
     var onOpenStocks: (() -> Void)?
     private let stockButton = HomeTileButton(title: "自选股", target: nil, action: nil)
     private let terminalButton = HomeTileButton(title: "终端", target: nil, action: nil)
     private let heading: NSTextField
     private let subtitle: NSTextField
-    private let novelLabel: NSTextField
+    private let novelButton = HomeTileButton(title: "小说", target: nil, action: nil)
     private var backgroundOpacity: CGFloat = 1
 
     override var isFlipped: Bool { true }
@@ -491,7 +519,6 @@ private final class ChromeHomeView: NSView {
         heading.maximumNumberOfLines = 2
         heading.cell?.wraps = true
         subtitle = Self.label("或添加以下内容", size: 12)
-        novelLabel = Self.label("小说", size: 11)
         super.init(frame: frameRect)
         terminalButton.isBordered = false
         terminalButton.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)?
@@ -503,7 +530,13 @@ private final class ChromeHomeView: NSView {
         addSubview(terminalButton)
         addSubview(heading)
         addSubview(subtitle)
-        addSubview(novelLabel)
+        novelButton.isBordered = false
+        novelButton.font = terminalButton.font
+        novelButton.image = NSImage(systemSymbolName: "book", accessibilityDescription: nil)
+        novelButton.setAccessibilityLabel("小说")
+        novelButton.target = self
+        novelButton.action = #selector(openNovel)
+        addSubview(novelButton)
         stockButton.isBordered = false
         stockButton.font = terminalButton.font
         stockButton.symbol = .stocks
@@ -511,11 +544,35 @@ private final class ChromeHomeView: NSView {
         stockButton.target = self
         stockButton.action = #selector(openStocks)
         addSubview(stockButton)
+        registerForDraggedTypes([.fileURL])
         setActionsEnabled(true)
     }
 
+    private func incomingBooks(_ sender: NSDraggingInfo) -> [URL]? {
+        guard novelButton.isEnabled,
+              let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self],
+                  options: [.urlReadingFileURLsOnly: true]) as? [URL],
+              !urls.isEmpty, urls.allSatisfy({ ["epub", "txt"].contains($0.pathExtension.lowercased()) }) else { return nil }
+        return urls
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard incomingBooks(sender) != nil else { return [] }
+        novelButton.highlight(true)
+        return .copy
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) { novelButton.highlight(false) }
+    override func draggingEnded(_ sender: NSDraggingInfo) { novelButton.highlight(false) }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        novelButton.highlight(false)
+        guard let urls = incomingBooks(sender) else { return false }
+        return onDropNovel?(urls) == true
+    }
+
     func setActionsEnabled(_ enabled: Bool) {
-        for button in [terminalButton, stockButton] {
+        for button in [terminalButton, novelButton, stockButton] {
             button.isEnabled = enabled
             button.toolTip = enabled ? "打开" + button.title : nil
         }
@@ -523,6 +580,7 @@ private final class ChromeHomeView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
+    @objc private func openNovel() { onOpenNovel?() }
     @objc private func openStocks() { onOpenStocks?() }
     @objc private func openTerminal() { onOpenTerminal?() }
 
@@ -541,19 +599,22 @@ private final class ChromeHomeView: NSView {
 
     override func layout() {
         super.layout()
-        for label in [heading, subtitle, novelLabel] { label.isHidden = isCompact }
+        for label in [heading, subtitle] { label.isHidden = isCompact }
         let origin = NSPoint(x: (bounds.width - 240) / 2, y: (bounds.height - 240) / 2)
-        let compactSide = min(40, bounds.height, (bounds.width - 4) / 2)
+        let compactSide = min(40, bounds.height, max(0, bounds.width - 4) / 3)
         terminalButton.imagePosition = isCompact ? .imageOnly : .imageAbove
         terminalButton.frame = isCompact
-            ? NSRect(x: bounds.midX - compactSide - 2, y: bounds.midY - compactSide / 2, width: compactSide, height: compactSide)
+            ? NSRect(x: bounds.midX - 1.5 * compactSide - 2, y: bounds.midY - compactSide / 2, width: compactSide, height: compactSide)
             : NSRect(x: 20 + origin.x, y: 182 + origin.y, width: 56, height: 56)
         heading.frame = NSRect(x: origin.x, y: 80 + origin.y, width: 240, height: 48)
         subtitle.frame = NSRect(x: 66 + origin.x, y: 144 + origin.y, width: 108, height: 20)
-        novelLabel.frame = NSRect(x: 92 + origin.x, y: 215 + origin.y, width: 56, height: 18)
+        novelButton.imagePosition = terminalButton.imagePosition
+        novelButton.frame = isCompact
+            ? NSRect(x: bounds.midX - compactSide / 2, y: terminalButton.frame.minY, width: compactSide, height: compactSide)
+            : NSRect(x: 92 + origin.x, y: 182 + origin.y, width: 56, height: 56)
         stockButton.imagePosition = terminalButton.imagePosition
         stockButton.frame = isCompact
-            ? NSRect(x: bounds.midX + 2, y: terminalButton.frame.minY, width: compactSide, height: compactSide)
+            ? NSRect(x: bounds.midX + compactSide / 2 + 2, y: terminalButton.frame.minY, width: compactSide, height: compactSide)
             : NSRect(x: 164 + origin.x, y: 182 + origin.y, width: 56, height: 56)
         needsDisplay = true
     }
@@ -576,15 +637,11 @@ private final class ChromeHomeView: NSView {
         divider.line(to: NSPoint(x: 224, y: 154))
         divider.stroke()
 
-        let symbols: [ChromeSymbol?] = [nil, .novel, nil]
-        for (index, symbol) in symbols.enumerated() {
+        for index in 0..<3 {
             let center = CGFloat(48 + index * 72)
             NSColor.white.withAlphaComponent(backgroundOpacity).setFill()
             NSBezierPath(roundedRect: NSRect(x: center - 28, y: 182, width: 56, height: 56),
                          xRadius: 4, yRadius: 4).fill()
-            let symbolSize: CGFloat = index == 1 ? 20 : 18
-            symbol?.draw(in: NSRect(x: center - symbolSize / 2, y: 200 - symbolSize / 2,
-                                  width: symbolSize, height: symbolSize), color: ChromePalette.ink)
         }
     }
 
@@ -793,7 +850,7 @@ final class ChromeButton: NSButton {
 
 @MainActor
 private enum ChromeSymbol: Equatable {
-    case add, eye, settings, lock, minus, close, novel, stocks
+    case add, eye, settings, lock, minus, close, stocks
 
     func draw(in rect: NSRect, color: NSColor) {
         NSGraphicsContext.saveGraphicsState()
@@ -848,17 +905,6 @@ private enum ChromeSymbol: Equatable {
         case .close:
             line([NSPoint(x: 4, y: 4), NSPoint(x: 16, y: 16)])
             line([NSPoint(x: 16, y: 4), NSPoint(x: 4, y: 16)])
-        case .novel:
-            path.move(to: NSPoint(x: 3, y: 12.5))
-            path.line(to: NSPoint(x: 13.5, y: 2))
-            path.line(to: NSPoint(x: 17.5, y: 15.5))
-            path.line(to: NSPoint(x: 19, y: 17))
-            path.line(to: NSPoint(x: 3, y: 17))
-            path.curve(to: NSPoint(x: 3, y: 12.5), controlPoint1: NSPoint(x: 0, y: 17),
-                       controlPoint2: NSPoint(x: 0.5, y: 14.5))
-            path.appendOval(in: NSRect(x: 5.5, y: 11, width: 2, height: 2))
-            line([NSPoint(x: 11, y: 9), NSPoint(x: 11.5, y: 7.5), NSPoint(x: 12.5, y: 9)])
-            line([NSPoint(x: 12.5, y: 14), NSPoint(x: 13, y: 12.5), NSPoint(x: 14, y: 14)])
         case .stocks:
             path.appendRoundedRect(NSRect(x: 2, y: 1.5, width: 16, height: 17), xRadius: 4, yRadius: 4)
             line([NSPoint(x: 2.5, y: 6), NSPoint(x: 17.5, y: 6)])

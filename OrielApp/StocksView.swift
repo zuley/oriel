@@ -7,6 +7,8 @@ struct StocksView: View {
     @State private var query = ""
     @State private var matches: [StockSymbol] = []
     @State private var searchStatus = ""
+    @State private var searchAttempt = 0
+    private struct SearchRequest: Equatable { let term: String; let attempt: Int }
     @State private var editing = false
     @State private var sort: Column?
     @State private var ascending = false
@@ -85,11 +87,15 @@ struct StocksView: View {
                     }
                 }
                 .padding(.horizontal, 7).frame(height: 25).background(Color.gray.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
-                Button { list.refresh() } label: {
+                Button {
+                    if term.isEmpty { list.refresh() } else { searchAttempt += 1 }
+                } label: {
                     Image(systemName: "arrow.clockwise").frame(width: 24, height: 25)
                         .background(Color.gray.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
                 }
-                .disabled(list.loading).help("刷新行情").accessibilityLabel("刷新行情")
+                .disabled(term.isEmpty && list.loading)
+                .help(term.isEmpty ? "刷新行情" : "重新搜索")
+                .accessibilityLabel(term.isEmpty ? "刷新行情" : "重新搜索")
             }
             .padding(.horizontal, 6).padding(.vertical, 4)
             if term.isEmpty {
@@ -122,8 +128,12 @@ struct StocksView: View {
                                 LazyVStack(spacing: 0) {
                                     ForEach(sorted) { symbol in
                                         quoteRow(symbol)
-                                            .background(StockRowHoverArea { onStockHover(symbol, $0) })
-                                            .onDisappear { onStockHover(symbol, false) }
+                                            .background {
+                                                if !editing {
+                                                    StockRowHoverArea { onStockHover(symbol, $0) }
+                                                        .onDisappear { onStockHover(symbol, false) }
+                                                }
+                                            }
                                     }
                                     if sorted.isEmpty { Text("搜索股票以加入自选").foregroundStyle(.secondary).padding(.vertical) }
                                 }
@@ -165,7 +175,7 @@ struct StocksView: View {
             }
         }
         .font(.system(size: 12)).buttonStyle(.plain)
-        .task(id: term) {
+        .task(id: SearchRequest(term: term, attempt: searchAttempt)) {
             let input = term
             matches = []
             guard !input.isEmpty else { return }
@@ -177,7 +187,7 @@ struct StocksView: View {
                 matches = result
                 searchStatus = "没有匹配的股票"
             } catch {
-                if !Task.isCancelled { searchStatus = "搜索失败，请重新输入" }
+                if !Task.isCancelled { searchStatus = "搜索失败，点刷新重试" }
             }
         }
     }

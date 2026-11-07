@@ -30,6 +30,8 @@ app_sources=(
   "$project_root/OrielApp/StockMarket.swift"
   "$project_root/OrielApp/StockChart.swift"
   "$project_root/OrielApp/StocksView.swift"
+  "$project_root/OrielApp/NovelSession.swift"
+  "$project_root/OrielApp/NovelView.swift"
   "$project_root/OrielApp/MiniWindowChromeView.swift"
 )
 
@@ -39,6 +41,10 @@ terminal_package="$project_root/Packages/OrielTerminal"
 terminal_build_flags=(--package-path "$terminal_package" --scratch-path "$output_dir/terminal-build" --triple "$target_triple")
 /usr/bin/xcrun swift build "${terminal_build_flags[@]}" --product OrielTerminal
 terminal_bin="$(/usr/bin/xcrun swift build "${terminal_build_flags[@]}" --show-bin-path)"
+
+reading_build_flags=(--package-path "$project_root/Packages/OrielReading" --scratch-path "$output_dir/reading-build" --triple "$target_triple")
+/usr/bin/xcrun swift build "${reading_build_flags[@]}" --product OrielReading
+reading_bin="$(/usr/bin/xcrun swift build "${reading_build_flags[@]}" --show-bin-path)"
 
 common_flags=(
   -swift-version 6
@@ -59,6 +65,7 @@ common_flags=(
   -parse-as-library -module-name Oriel \
   -I "$module_dir" -L "$module_dir" -lOrielCore \
   -I "$terminal_bin" -I "$terminal_bin/Modules" -L "$terminal_bin" -lOrielTerminal \
+  -I "$reading_bin" -I "$reading_bin/Modules" -L "$reading_bin" -lOrielReading \
   -framework AppKit -framework SwiftUI -framework WebKit \
   "${app_sources[@]}" \
   -o "$app_bundle/Contents/MacOS/Oriel"
@@ -75,6 +82,10 @@ bundle_plist="$app_bundle/Contents/Info.plist"
 cp "$project_root/OrielApp/Resources/fixture.html" "$app_bundle/Contents/Resources/fixture.html"
 cp "$project_root/OrielApp/Resources/detail.html" "$app_bundle/Contents/Resources/detail.html"
 cp "$project_root/OrielApp/Resources/SwiftTerm-LICENSE.txt" "$app_bundle/Contents/Resources/SwiftTerm-LICENSE.txt"
+if [[ -d "$reading_bin/ZIPFoundation_ZIPFoundation.bundle" ]]; then
+  /usr/bin/ditto "$reading_bin/ZIPFoundation_ZIPFoundation.bundle" "$app_bundle/Contents/Resources/ZIPFoundation_ZIPFoundation.bundle"
+fi
+/usr/bin/install -m 644 "$project_root/OrielApp/Resources/ZIPFoundation-LICENSE.txt" "$app_bundle/Contents/Resources/ZIPFoundation-LICENSE.txt"
 cp -R "$project_root/OrielApp/Resources/OrielZsh" "$app_bundle/Contents/Resources/"
 printf 'APPL????' > "$app_bundle/Contents/PkgInfo"
 /usr/bin/codesign --force --sign - "$app_bundle"

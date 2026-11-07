@@ -24,10 +24,11 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
 
     private let actions: Actions
     private var chrome: MiniWindowChromeView!
+    private weak var novelLibrary: NovelLibrary?
     private let watchlist = StockWatchlist()
     private let stockChart = StockChartHover()
     private var currentState: WindowSnapshot?
-    private enum Page { case home, web, terminal, stocks }
+    private enum Page { case home, web, terminal, stocks, novel }
     @MainActor
     private final class Tab {
         let number: Int
@@ -35,6 +36,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         var forwardPage: Page?
         var terminal: ShellTerminalView?
         var web: WebContent?
+        var novel: NovelSession?
+        var novelView: NSHostingView<NovelView>?
         var stocksView: NSHostingView<StocksView>?
 
         init(number: Int) { self.number = number }
@@ -43,12 +46,17 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             switch page {
             case .home: return "首页 \(number)"
             case .terminal: return "终端 \(number)"
+            case .novel: return novel?.book.map { "\($0.title) · \(number)" } ?? "小说 \(number)"
             case .stocks: return "自选股 \(number)"
             case .web: return "网页 \(number)"
             }
         }
 
         func dispose() {
+            novel?.dispose()
+            novelView?.removeFromSuperview()
+            novelView = nil
+            novel = nil
             stocksView?.removeFromSuperview()
             stocksView = nil
             terminal?.endSession()
@@ -73,6 +81,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private var backgroundOpacity: Double = 0.75
     private var contentOpacity: Double = 0.75
     private var revealingToolbar = false
+    private var trackingMenus = Set<ObjectIdentifier>()
     private var isDisposed = false
 
     var bodyFrame: NSRect { convertToScreen(chrome.convert(chrome.bounds, to: nil)) }
@@ -82,11 +91,14 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         switch selected.page {
         case .terminal: return responder === selected.terminal
         case .stocks: return responder is NSTextInputClient
+        case .novel: return (responder as? NSTextView)?.isEditable == true
         default: return false
         }
     }
 
-    var keepsWindowVisible: Bool { settingsPanel.isVisible || stockChart.containsPointer }
+    var keepsWindowVisible: Bool {
+        settingsPanel.isVisible || stockChart.containsPointer || selected.novel?.choosingFile == true || !trackingMenus.isEmpty
+    }
 
     init(frame: CGRect, actions: Actions) {
         self.actions = actions
@@ -117,6 +129,14 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             selectTab: { [weak self] in self?.selectTab(number: $0) },
             closeTab: { [weak self] in self?.closeTab(number: $0) },
             openTerminal: { [weak self] in self?.showTerminal() },
+            openNovel: { [weak self] in self?.showNovel() },
+            dropNovel: { [weak self] urls in
+                guard let self, canManageTabs else { return false }
+                showNovel()
+                selected.novel?.start()
+                selected.novel?.openFiles(urls)
+                return true
+            },
             openStocks: { [weak self] in self?.showStocks() },
             toggleAutomaticHiding: actions.toggleAutomaticHiding,
             settings: { [weak self] sender in self?.showSettings(from: sender) },
@@ -134,6 +154,19 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         applyTransparency()
         refreshTabs()
         delegate = self
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(menuBegan(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
+        center.addObserver(self, selector: #selector(menuEnded(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
+    }
+
+    @objc private func menuBegan(_ notification: Notification) {
+        guard let menu = notification.object as? NSMenu, canManageTabs,
+              !trackingMenus.isEmpty || frame.contains(NSEvent.mouseLocation) else { return }
+        trackingMenus.insert(ObjectIdentifier(menu))
+    }
+
+    @objc private func menuEnded(_ notification: Notification) {
+        if let menu = notification.object as? NSMenu { trackingMenus.remove(ObjectIdentifier(menu)) }
     }
 
     override var canBecomeKey: Bool { !ignoresMouseEvents }
@@ -173,6 +206,9 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     func dispose() {
         guard !isDisposed else { return }
         isDisposed = true
+        NotificationCenter.default.removeObserver(self, name: NSMenu.didBeginTrackingNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSMenu.didEndTrackingNotification, object: nil)
+        trackingMenus.removeAll()
         hoveredResizeHandle?.releaseCursor()
         stockChart.dismiss()
         watchlist.setVisible(false)
@@ -367,6 +403,25 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         selected = tab
         watchlist.setVisible(tab.page == .stocks && currentState?.isVisible == true)
         switch tab.page {
+        case .novel:
+            if tab.novelView == nil {
+                let library = novelLibrary ?? NovelLibrary()
+                novelLibrary = library
+                let session = NovelSession(library: library)
+                session.onBookChanged = { [weak self] in self?.refreshTabs() }
+                let root = NovelView(session: session, library: library) { [weak self, weak session] in
+                    guard let self, self.canManageTabs, self.selected.page == .novel, self.selected.novel === session else { return }
+                    session?.importFile(in: self)
+                }
+                let view = NSHostingView(rootView: root)
+                view.sizingOptions = []
+                tab.novel = session
+                tab.novelView = view
+            }
+            if let view = tab.novelView {
+                chrome.showReadingSurface(view)
+                makeKeyAndOrderFront(nil)
+            }
         case .stocks:
             if tab.stocksView == nil {
                 let view = NSHostingView(rootView: StocksView(list: watchlist) { [weak self, weak tab] symbol, inside in
@@ -380,7 +435,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 tab.stocksView = view
             }
             if let view = tab.stocksView {
-                chrome.showStocks(view)
+                chrome.showReadingSurface(view)
                 makeKeyAndOrderFront(nil)
             }
         case .terminal:
@@ -399,9 +454,32 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if canManageTabs, isKeyWindow,
-           event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command {
-            switch event.charactersIgnoringModifiers?.lowercased() {
+        guard canManageTabs, isKeyWindow, attachedSheet == nil else { return super.performKeyEquivalent(with: event) }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        let key = event.charactersIgnoringModifiers?.lowercased()
+        if tabs.count > 1, let index = tabs.firstIndex(where: { $0 === selected }) {
+            if modifiers == .command, let key, let digit = Int(key), (1...9).contains(digit) {
+                let target = digit == 9 ? tabs.count - 1 : digit - 1
+                if tabs.indices.contains(target) { activate(tabs[target]); return true }
+            }
+            let step: Int
+            switch (modifiers, key) {
+            case (.control, _) where event.keyCode == 48: step = 1
+            case ([.control, .shift], _) where event.keyCode == 48: step = -1
+            case ([.command, .shift], "]"), ([.command, .shift], "}"): step = 1
+            case ([.command, .shift], "["), ([.command, .shift], "{"): step = -1
+            default: step = 0
+            }
+            if step != 0 { activate(tabs[(index + step + tabs.count) % tabs.count]); return true }
+        }
+        if modifiers == .command {
+            switch key {
+            case "o" where selected.page == .novel:
+                selected.novel?.importFile(in: self); return true
+            case "f" where selected.page == .novel && selected.novel?.section == .reading:
+                selected.novel?.section = .search; return true
+            case "d" where selected.page == .novel && selected.novel?.section == .reading:
+                selected.novel?.markHere(); return true
             case "t": addTab(); return true
             case "w": closeTab(number: selected.number); return true
             case "[" where selected.page != .home: goBack(); return true
@@ -430,11 +508,18 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     @objc private func goForward() {
         switch (selected.page, selected.forwardPage) {
         case (.home, .terminal): showTerminal()
+        case (.home, .novel): showNovel()
         case (.home, .stocks): showStocks()
         case (.home, .web): showFixture()
         case (.web, _): selected.web?.webView.goForward()
         default: break
         }
+    }
+
+    private func showNovel() {
+        guard canManageTabs else { return }
+        selected.page = .novel
+        activate(selected)
     }
 
     private func showStocks() {

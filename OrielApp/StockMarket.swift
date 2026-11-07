@@ -187,23 +187,31 @@ final class StockWatchlist: ObservableObject {
     @Published private(set) var status = "行情可能延时"
     @Published private(set) var loading = false
     private let defaults: UserDefaults
+    private let fetchQuotes: @Sendable ([StockSymbol]) async throws -> [String: StockQuote]
     private let key = "watchlist.symbols.v1"
     private var ticker: Task<Void, Never>?
     private var request: Task<Void, Never>?
+    private var lastQuoteUpdate: ContinuousClock.Instant?
+    private static let interval: Duration = .seconds(30)
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard,
+         fetchQuotes: @escaping @Sendable ([StockSymbol]) async throws -> [String: StockQuote] = TencentMarket.quotes(for:)) {
         self.defaults = defaults
+        self.fetchQuotes = fetchQuotes
         symbols = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode([StockSymbol].self, from: $0) } ?? StockSymbol.initial
     }
 
     func setVisible(_ visible: Bool) {
         guard visible != (ticker != nil) else { return }
         if visible {
-            refresh()
+            let remaining = lastQuoteUpdate.map { Self.interval - $0.duration(to: .now) } ?? .zero
+            if remaining <= .zero { refresh() }
             ticker = Task { [weak self] in
+                var delay = remaining > .zero ? remaining : Self.interval
                 while !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                    do { try await Task.sleep(for: delay) } catch { return }
                     if self?.loading == false { self?.refresh() }
+                    delay = Self.interval
                 }
             }
         } else {
@@ -221,6 +229,7 @@ final class StockWatchlist: ObservableObject {
             symbols.append(symbol)
         }
         defaults.set(try? JSONEncoder().encode(symbols), forKey: key)
+        lastQuoteUpdate = nil
         refresh()
     }
 
@@ -229,11 +238,12 @@ final class StockWatchlist: ObservableObject {
         loading = true
         var items = symbols.filter { $0.id != StockSymbol.index.id }
         items.append(.index)
-        request = Task { [weak self, items] in
+        request = Task { [weak self, items, fetchQuotes] in
             do {
-                let result = try await TencentMarket.quotes(for: items)
+                let result = try await fetchQuotes(items)
                 try Task.checkCancellation()
                 self?.quotes = result
+                self?.lastQuoteUpdate = .now
                 self?.status = result.count < items.count ? "部分行情缺失" : "行情可能延时"
             } catch {
                 guard !Task.isCancelled else { return }

@@ -12,14 +12,23 @@
 		A10000000000000000000004 /* WebContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* WebContent.swift */; };
 		A10000000000000000000013 /* StockMarket.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* StockMarket.swift */; };
 		A10000000000000000000015 /* StockChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* StockChart.swift */; };
+		A10000000000000000000016 /* NovelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* NovelView.swift */; };
+		A10000000000000000000017 /* NovelSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* NovelSession.swift */; };
 		A10000000000000000000014 /* StocksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* StocksView.swift */; };
 		A10000000000000000000005 /* fixture.html in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* fixture.html */; };
 		A10000000000000000000006 /* detail.html in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* detail.html */; };
 		A10000000000000000000007 /* OrielCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* OrielCore */; };
 		A10000000000000000000009 /* MiniWindowChromeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* MiniWindowChromeView.swift */; };
 		A10000000000000000000010 /* OrielTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000004 /* OrielTerminal */; };
+		A10000000000000000000020 /* OrielReading in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000006 /* OrielReading */; };
 		A10000000000000000000011 /* SwiftTerm-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* SwiftTerm-LICENSE.txt */; };
+		A10000000000000000000019 /* ZIPFoundation-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* ZIPFoundation-LICENSE.txt */; };
 		A10000000000000000000012 /* OrielZsh in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* OrielZsh */; };
+		B10000000000000000000001 /* NovelSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* NovelSessionTests.swift */; };
+		B10000000000000000000002 /* NovelSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* NovelSession.swift */; };
+		B10000000000000000000003 /* OrielReading in Frameworks */ = {isa = PBXBuildFile; productRef = B90000000000000000000001 /* OrielReading */; };
+		B10000000000000000000004 /* StockMarket.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* StockMarket.swift */; };
+		B10000000000000000000005 /* StockWatchlistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* StockWatchlistTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +38,8 @@
 		A20000000000000000000004 /* WebContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebContent.swift; sourceTree = "<group>"; };
 		A20000000000000000000013 /* StockMarket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockMarket.swift; sourceTree = "<group>"; };
 		A20000000000000000000015 /* StockChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChart.swift; sourceTree = "<group>"; };
+		A20000000000000000000016 /* NovelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelView.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* NovelSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelSession.swift; sourceTree = "<group>"; };
 		A20000000000000000000014 /* StocksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StocksView.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* fixture.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = fixture.html; sourceTree = "<group>"; };
 		A20000000000000000000006 /* detail.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = detail.html; sourceTree = "<group>"; };
@@ -36,16 +47,21 @@
 		A20000000000000000000008 /* Oriel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Oriel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000009 /* MiniWindowChromeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniWindowChromeView.swift; sourceTree = "<group>"; };
 		A20000000000000000000011 /* SwiftTerm-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SwiftTerm-LICENSE.txt"; sourceTree = "<group>"; };
+		A20000000000000000000019 /* ZIPFoundation-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "ZIPFoundation-LICENSE.txt"; sourceTree = "<group>"; };
 		A20000000000000000000012 /* OrielZsh */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "OrielZsh"; sourceTree = "<group>"; };
+		B20000000000000000000001 /* NovelSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelSessionTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000002 /* OrielAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OrielAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000003 /* StockWatchlistTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockWatchlistTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A30000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (A10000000000000000000007 /* OrielCore in Frameworks */, A10000000000000000000010 /* OrielTerminal in Frameworks */,);
+			files = (A10000000000000000000007 /* OrielCore in Frameworks */, A10000000000000000000010 /* OrielTerminal in Frameworks */, A10000000000000000000020 /* OrielReading in Frameworks */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (B10000000000000000000003 /* OrielReading in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -53,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				A40000000000000000000002 /* OrielApp */,
+				B40000000000000000000001 /* OrielAppTests */,
 				A40000000000000000000004 /* Config */,
 				A40000000000000000000005 /* Products */,
 			);
@@ -67,6 +84,8 @@
 				A20000000000000000000004 /* WebContent.swift */,
 				A20000000000000000000013 /* StockMarket.swift */,
 				A20000000000000000000015 /* StockChart.swift */,
+				A20000000000000000000016 /* NovelView.swift */,
+				A20000000000000000000017 /* NovelSession.swift */,
 				A20000000000000000000014 /* StocksView.swift */,
 				A20000000000000000000009 /* MiniWindowChromeView.swift */,
 				A40000000000000000000003 /* Resources */,
@@ -80,6 +99,7 @@
 				A20000000000000000000005 /* fixture.html */,
 				A20000000000000000000006 /* detail.html */,
 				A20000000000000000000011 /* SwiftTerm-LICENSE.txt */,
+				A20000000000000000000019 /* ZIPFoundation-LICENSE.txt */,
 				A20000000000000000000012 /* OrielZsh */,
 			);
 			path = Resources;
@@ -93,10 +113,11 @@
 		};
 		A40000000000000000000005 /* Products */ = {
 			isa = PBXGroup;
-			children = (A20000000000000000000008 /* Oriel.app */,);
+			children = (A20000000000000000000008 /* Oriel.app */, B20000000000000000000002 /* OrielAppTests.xctest */,);
 			name = Products;
 			sourceTree = "<group>";
 		};
+		B40000000000000000000001 /* OrielAppTests */ = {isa = PBXGroup; children = (B20000000000000000000001 /* NovelSessionTests.swift */, B20000000000000000000003 /* StockWatchlistTests.swift */,); path = OrielAppTests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -111,10 +132,22 @@
 			buildRules = ();
 			dependencies = ();
 			name = Oriel;
-			packageProductDependencies = (A90000000000000000000002 /* OrielCore */, A90000000000000000000004 /* OrielTerminal */,);
+			packageProductDependencies = (A90000000000000000000002 /* OrielCore */, A90000000000000000000004 /* OrielTerminal */, A90000000000000000000006 /* OrielReading */,);
 			productName = Oriel;
 			productReference = A20000000000000000000008 /* Oriel.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B50000000000000000000001 /* OrielAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B80000000000000000000001 /* OrielAppTests configurations */;
+			buildPhases = (B30000000000000000000002 /* Sources */, B30000000000000000000001 /* Frameworks */,);
+			buildRules = ();
+			dependencies = ();
+			name = OrielAppTests;
+			packageProductDependencies = (B90000000000000000000001 /* OrielReading */,);
+			productName = OrielAppTests;
+			productReference = B20000000000000000000002 /* OrielAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -133,11 +166,11 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (en, Base,);
 			mainGroup = A40000000000000000000001;
-			packageReferences = (A90000000000000000000001 /* XCLocalSwiftPackageReference "Packages/OrielCore" */, A90000000000000000000003 /* OrielTerminal */,);
+			packageReferences = (A90000000000000000000001 /* XCLocalSwiftPackageReference "Packages/OrielCore" */, A90000000000000000000003 /* OrielTerminal */, A90000000000000000000005 /* OrielReading */,);
 			productRefGroup = A40000000000000000000005 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A50000000000000000000001 /* Oriel */,);
+			targets = (A50000000000000000000001 /* Oriel */, B50000000000000000000001 /* OrielAppTests */,);
 		};
 /* End PBXProject section */
 
@@ -149,6 +182,7 @@
 				A10000000000000000000005 /* fixture.html in Resources */,
 				A10000000000000000000006 /* detail.html in Resources */,
 				A10000000000000000000011 /* SwiftTerm-LICENSE.txt in Resources */,
+				A10000000000000000000019 /* ZIPFoundation-LICENSE.txt in Resources */,
 				A10000000000000000000012 /* OrielZsh in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -166,11 +200,14 @@
 				A10000000000000000000004 /* WebContent.swift in Sources */,
 				A10000000000000000000013 /* StockMarket.swift in Sources */,
 				A10000000000000000000015 /* StockChart.swift in Sources */,
+				A10000000000000000000016 /* NovelView.swift in Sources */,
+				A10000000000000000000017 /* NovelSession.swift in Sources */,
 				A10000000000000000000014 /* StocksView.swift in Sources */,
 				A10000000000000000000009 /* MiniWindowChromeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10000000000000000000001 /* NovelSessionTests.swift in Sources */, B10000000000000000000002 /* NovelSession.swift in Sources */, B10000000000000000000004 /* StockMarket.swift in Sources */, B10000000000000000000005 /* StockWatchlistTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -241,6 +278,16 @@
 			};
 			name = Release;
 		};
+		B70000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { CODE_SIGN_IDENTITY = "-"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = app.oriel.tests; PRODUCT_NAME = "$(TARGET_NAME)"; };
+			name = Debug;
+		};
+		B70000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { CODE_SIGN_IDENTITY = "-"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = app.oriel.tests; PRODUCT_NAME = "$(TARGET_NAME)"; };
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -256,6 +303,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		B80000000000000000000001 /* OrielAppTests configurations */ = {isa = XCConfigurationList; buildConfigurations = (B70000000000000000000001 /* Debug */, B70000000000000000000002 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -264,6 +312,7 @@
 			relativePath = Packages/OrielCore;
 		};
 		A90000000000000000000003 /* OrielTerminal */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/OrielTerminal; };
+		A90000000000000000000005 /* OrielReading */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/OrielReading; };
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -273,6 +322,8 @@
 			productName = OrielCore;
 		};
 		A90000000000000000000004 /* OrielTerminal */ = {isa = XCSwiftPackageProductDependency; package = A90000000000000000000003 /* OrielTerminal */; productName = OrielTerminal; };
+		A90000000000000000000006 /* OrielReading */ = {isa = XCSwiftPackageProductDependency; package = A90000000000000000000005 /* OrielReading */; productName = OrielReading; };
+		B90000000000000000000001 /* OrielReading */ = {isa = XCSwiftPackageProductDependency; package = A90000000000000000000005 /* OrielReading */; productName = OrielReading; };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A60000000000000000000001 /* Project object */;
