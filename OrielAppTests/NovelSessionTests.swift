@@ -1,8 +1,42 @@
 import XCTest
+import Combine
 import OrielReading
 
 @MainActor
 final class NovelSessionTests: XCTestCase {
+    func testOpeningBookSurvivesReaderViewFirstAppearance() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { try? FileManager.default.removeItem(at: folder); defaults.removePersistentDomain(forName: suite) }
+        let library = NovelLibrary(root: folder, defaults: defaults)
+        let book = try await library.shelf.add(data: Data("第一章\n打开目标书籍。".utf8), name: "目标.txt")
+        let reader = NovelSession(library: library)
+        reader.open(book)
+        reader.start()
+        try await settle(reader)
+        XCTAssertEqual(reader.book?.id, book.id)
+        XCTAssertEqual(reader.section, .reading)
+    }
+
+    func testTurningChapterPublishesSharedShelfProgressWithoutARefresh() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { try? FileManager.default.removeItem(at: folder); defaults.removePersistentDomain(forName: suite) }
+        let library = NovelLibrary(root: folder, defaults: defaults)
+        let book = try await library.shelf.add(data: Data("第一章\n出发。\n第二章\n到了。".utf8), name: "同步.txt")
+        let reader = NovelSession(library: library)
+        reader.open(book)
+        try await settle(reader)
+        var changes = 0
+        let observation = library.objectWillChange.sink { changes += 1 }
+        reader.turn(to: 1)
+        XCTAssertGreaterThan(changes, 0)
+        XCTAssertEqual(library.places.place(for: book.id).chapter, 1)
+        withExtendedLifetime(observation) {}
+    }
+
     func testRemovingBookReturnsBothReadersToShelfAndClearsItsPlaces() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let suite = UUID().uuidString

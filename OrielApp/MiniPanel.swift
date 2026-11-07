@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 import OrielCore
 import OrielTerminal
 
@@ -14,6 +15,9 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         let close: () -> Void
         let frameChanged: (CGRect) -> Void
         let geometryInteractionChanged: (Bool) -> Void
+        var renameWindow: () -> Void = {}
+        var noteIsOpenElsewhere: (UUID) -> Bool = { _ in false }
+        var focusNoteElsewhere: (UUID) -> Bool = { _ in false }
         var transparencyRecoveryChanged: (Bool) -> Void = { _ in }
     }
 
@@ -24,11 +28,12 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
 
     private let actions: Actions
     private var chrome: MiniWindowChromeView!
-    private weak var novelLibrary: NovelLibrary?
-    private let watchlist = StockWatchlist()
+    private let novelLibrary: NovelLibrary
+    private let watchlist: StockWatchlist
+    private let watchlistOwner = UUID().uuidString
     private let stockChart = StockChartHover()
     private var currentState: WindowSnapshot?
-    private enum Page { case home, web, terminal, stocks, novel }
+    private enum Page { case home, web, terminal, stocks, novel, notes }
     @MainActor
     private final class Tab {
         let number: Int
@@ -36,6 +41,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         var forwardPage: Page?
         var terminal: ShellTerminalView?
         var web: WebContent?
+        var notes: NotesSession?
+        var notesView: NSHostingView<NotesView>?
         var novel: NovelSession?
         var novelView: NSHostingView<NovelView>?
         var stocksView: NSHostingView<StocksView>?
@@ -46,6 +53,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             switch page {
             case .home: return "首页 \(number)"
             case .terminal: return "终端 \(number)"
+            case .notes: return notes?.document.title ?? "便签"
             case .novel: return novel?.book.map { "\($0.title) · \(number)" } ?? "小说 \(number)"
             case .stocks: return "自选股 \(number)"
             case .web: return "网页 \(number)"
@@ -53,6 +61,10 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         }
 
         func dispose() {
+            notes?.dispose()
+            notesView?.removeFromSuperview()
+            notesView = nil
+            notes = nil
             novel?.dispose()
             novelView?.removeFromSuperview()
             novelView = nil
@@ -72,6 +84,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private var tabs: [Tab]
     private var selected: Tab
     private var nextTabNumber = 2
+    private var noteChanges: AnyCancellable?
+    private var noteRefreshPending = false
     private var geometryInteraction: GeometryInteraction?
     private var resizeStart: (frame: NSRect, pointer: NSPoint)?
     private var dragCompletionTimer: Timer?
@@ -79,6 +93,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private var lockRecoveryPanel: LockRecoveryPanel?
     private let settingsPanel = TransparencySettingsPanel()
     private var backgroundOpacity: Double = 0.75
+    private var emphasis: WindowGroupController.Emphasis = .normal
     private var contentOpacity: Double = 0.75
     private var revealingToolbar = false
     private var trackingMenus = Set<ObjectIdentifier>()
@@ -91,17 +106,21 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         switch selected.page {
         case .terminal: return responder === selected.terminal
         case .stocks: return responder is NSTextInputClient
-        case .novel: return (responder as? NSTextView)?.isEditable == true
+        case .novel, .notes: return (responder as? NSTextView)?.isEditable == true
         default: return false
         }
     }
 
     var keepsWindowVisible: Bool {
-        settingsPanel.isVisible || stockChart.containsPointer || selected.novel?.choosingFile == true || !trackingMenus.isEmpty
+        attachedSheet != nil || settingsPanel.isVisible || stockChart.containsPointer || selected.novel?.choosingFile == true || selected.notes?.exporting == true || selected.notes?.choosingNote == true || !trackingMenus.isEmpty
     }
 
-    init(frame: CGRect, actions: Actions) {
+    init(frame: CGRect, library: NovelLibrary, watchlist: StockWatchlist, preferences: AppPreferences, actions: Actions) {
         self.actions = actions
+        self.novelLibrary = library
+        self.watchlist = watchlist
+        self.backgroundOpacity = preferences.backgroundOpacity
+        self.contentOpacity = preferences.contentOpacity
         let first = Tab(number: 1)
         selected = first
         tabs = [first]
@@ -138,6 +157,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 return true
             },
             openStocks: { [weak self] in self?.showStocks() },
+            openNotes: { [weak self] in self?.showNotes() },
+            renameWindow: actions.renameWindow,
             toggleAutomaticHiding: actions.toggleAutomaticHiding,
             settings: { [weak self] sender in self?.showSettings(from: sender) },
             toggleLock: actions.toggleLock,
@@ -172,6 +193,15 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     override var canBecomeKey: Bool { !ignoresMouseEvents }
     override var canBecomeMain: Bool { false }
 
+    func setWindowName(_ name: String) {
+        title = "Oriel · \(name)"
+        chrome.setWindowName(name)
+    }
+
+    func confirmCanClose() -> Bool {
+        NotesWorkspace.shared.confirmCanClose(documentIDs: Set(tabs.compactMap { $0.notes?.document.id }))
+    }
+
     func cancelGeometryInteraction() {
         finishGeometryInteraction(reportFinalFrame: false, notify: false)
     }
@@ -179,20 +209,26 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     func apply(_ state: WindowSnapshot) {
         guard !isDisposed else { return }
         currentState = state
-        watchlist.setVisible(state.isVisible && selected.page == .stocks)
+        watchlist.setVisible(state.isVisible && selected.page == .stocks, owner: watchlistOwner)
         if !state.isVisible { chrome?.dismissTooltip() }
         if state.isLocked || !state.isVisible {
+            if let sheet = attachedSheet { endSheet(sheet, returnCode: .cancel) }
             hoveredResizeHandle?.releaseCursor()
             stockChart.dismiss()
-            if let terminal = selected.terminal, firstResponder === terminal { makeFirstResponder(nil) }
+            if hasEditingFocus {
+                selected.notes?.document.commitEditing?()
+                try? NotesWorkspace.shared.saveAll()
+                makeFirstResponder(nil)
+            }
             settingsPanel.performClose(nil)
+            if selected.notes?.choosingNote == true { selected.notes?.showingList = false }
             // The corresponding controller command already ends the interaction.
             // Applying a snapshot must not synchronously emit a new state transition.
             finishGeometryInteraction(reportFinalFrame: false, notify: false)
         }
         if state.isLocked && isKeyWindow { resignKey() }
         ignoresMouseEvents = state.isLocked
-        alphaValue = state.opacity
+        alphaValue = state.opacity * (emphasis == .dimmed ? 0.22 : 1)
         updateToolbar()
         if state.isVisible && !isVisible {
             // Automatic revelation must not activate the app or acquire keyboard focus.
@@ -206,12 +242,14 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     func dispose() {
         guard !isDisposed else { return }
         isDisposed = true
+        noteChanges = nil
+        if let sheet = attachedSheet { endSheet(sheet, returnCode: .cancel) }
         NotificationCenter.default.removeObserver(self, name: NSMenu.didBeginTrackingNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: NSMenu.didEndTrackingNotification, object: nil)
         trackingMenus.removeAll()
         hoveredResizeHandle?.releaseCursor()
         stockChart.dismiss()
-        watchlist.setVisible(false)
+        watchlist.setVisible(false, owner: watchlistOwner)
         settingsPanel.performClose(nil)
         settingsPanel.contentViewController = nil
         delegate = nil
@@ -360,7 +398,40 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     }
 
     private func refreshTabs() {
+        guard !isDisposed else { return }
+        if !tabs.contains(where: { $0.notes != nil }) { noteChanges = nil }
         chrome.setTabs(tabs.map { ($0.number, $0.title) }, selected: selected.number)
+    }
+
+    private func observeNoteTitles() {
+        guard noteChanges == nil else { return }
+        noteChanges = NotesWorkspace.shared.objectWillChange.sink { [weak self] in
+            guard let self, !isDisposed, !noteRefreshPending else { return }
+            noteRefreshPending = true
+            // One refresh per window/run-loop turn, after published records are updated.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                noteRefreshPending = false
+                refreshTabs()
+            }
+        }
+    }
+
+    func applyDefaults(_ preferences: AppPreferences) {
+        guard !isDisposed else { return }
+        cancelGeometryInteraction()
+        backgroundOpacity = preferences.backgroundOpacity
+        contentOpacity = preferences.contentOpacity
+        applyTransparency()
+        actions.transparencyRecoveryChanged(max(backgroundOpacity, contentOpacity) <= 0.05)
+        if let visible = (screen ?? NSScreen.main)?.visibleFrame {
+            let width = min(preferences.width, visible.width)
+            let height = min(preferences.height, visible.height)
+            setFrame(NSRect(x: min(max(frame.minX, visible.minX), visible.maxX - width),
+                            y: min(max(frame.maxY - height, visible.minY), visible.maxY - height),
+                            width: width, height: height), display: true)
+            actions.frameChanged(bodyFrame)
+        }
     }
 
     private var canManageTabs: Bool {
@@ -382,6 +453,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
 
     private func closeTab(number: Int) {
         guard canManageTabs, let index = tabs.firstIndex(where: { $0.number == number }) else { return }
+        let noteIDs = Set([tabs[index].notes?.document.id].compactMap { $0 })
+        guard NotesWorkspace.shared.confirmCanClose(documentIDs: noteIDs) else { return }
         let closed = tabs.remove(at: index)
         let wasSelected = closed === selected
         if wasSelected { makeFirstResponder(nil) }
@@ -398,21 +471,46 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     }
 
     private func activate(_ tab: Tab) {
+        selected.notes?.document.commitEditing?()
+        try? NotesWorkspace.shared.saveAll()
         stockChart.dismiss()
         makeFirstResponder(nil)
         selected = tab
-        watchlist.setVisible(tab.page == .stocks && currentState?.isVisible == true)
+        watchlist.setVisible(tab.page == .stocks && currentState?.isVisible == true, owner: watchlistOwner)
         switch tab.page {
+        case .notes:
+            if tab.notesView == nil {
+                let workspace = NotesWorkspace.shared
+                let recent = workspace.list().max(by: { $0.record.updated < $1.record.updated })
+                let initial = recent.flatMap { note in (tabs.contains(where: { $0.notes?.document.id == note.id }) || actions.noteIsOpenElsewhere(note.id)) ? nil : note }
+                let session = NotesSession(workspace: workspace, document: initial ?? workspace.create())
+                let root = NotesView(session: session, workspace: session.workspace,
+                    open: { [weak self, weak tab] document in
+                        guard let self, let tab, self.canManageTabs, self.selected === tab else { return }
+                        self.openNote(document, in: tab)
+                    }, export: { [weak self, weak session] in
+                        guard let self, self.canManageTabs else { return }
+                        session?.export(in: self)
+                    })
+                let view = NSHostingView(rootView: root)
+                view.sizingOptions = []
+                tab.notes = session
+                tab.notesView = view
+                observeNoteTitles()
+            }
+            if let view = tab.notesView {
+                chrome.showReadingSurface(view)
+                makeKeyAndOrderFront(nil)
+            }
         case .novel:
             if tab.novelView == nil {
-                let library = novelLibrary ?? NovelLibrary()
-                novelLibrary = library
+                let library = novelLibrary
                 let session = NovelSession(library: library)
                 session.onBookChanged = { [weak self] in self?.refreshTabs() }
-                let root = NovelView(session: session, library: library) { [weak self, weak session] in
+                let root = NovelView(session: session, library: library, chooseFile: { [weak self, weak session] in
                     guard let self, self.canManageTabs, self.selected.page == .novel, self.selected.novel === session else { return }
                     session?.importFile(in: self)
-                }
+                })
                 let view = NSHostingView(rootView: root)
                 view.sizingOptions = []
                 tab.novel = session
@@ -474,6 +572,12 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         }
         if modifiers == .command {
             switch key {
+            case "n" where selected.page == .notes:
+                openNote(NotesWorkspace.shared.create(), in: selected); return true
+            case "f" where selected.page == .notes:
+                selected.notes?.showList(); return true
+            case "s" where selected.page == .notes:
+                try? NotesWorkspace.shared.saveAll(); return true
             case "o" where selected.page == .novel:
                 selected.novel?.importFile(in: self); return true
             case "f" where selected.page == .novel && selected.novel?.section == .reading:
@@ -509,10 +613,54 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         switch (selected.page, selected.forwardPage) {
         case (.home, .terminal): showTerminal()
         case (.home, .novel): showNovel()
+        case (.home, .notes): showNotes()
         case (.home, .stocks): showStocks()
         case (.home, .web): showFixture()
         case (.web, _): selected.web?.webView.goForward()
         default: break
+        }
+    }
+
+    func containsNote(_ id: UUID) -> Bool { tabs.contains { $0.notes?.document.id == id } }
+
+    func revealNote(_ id: UUID) {
+        guard canManageTabs, let tab = tabs.first(where: { $0.notes?.document.id == id }) else { return }
+        tab.page = .notes
+        tab.notes?.showingList = false
+        activate(tab)
+        if let editor = tab.notes?.document.editorView?.documentView { makeFirstResponder(editor) }
+    }
+
+    func revealUnsavedNote() {
+        guard canManageTabs,
+              let document = NotesWorkspace.shared.list().first(where: { $0.isDirty && $0.errorMessage != nil }) else { return }
+        if let existing = tabs.first(where: { $0.notes?.document.id == document.id }) {
+            existing.page = .notes
+            existing.notes?.showingList = false
+            activate(existing)
+        } else {
+            addTab()
+            selected.page = .notes
+            activate(selected)
+            openNote(document, in: selected)
+        }
+    }
+
+    private func showNotes() {
+        guard canManageTabs else { return }
+        selected.page = .notes
+        activate(selected)
+    }
+
+    private func openNote(_ document: NoteDocument, in tab: Tab) {
+        if actions.focusNoteElsewhere(document.id) { return }
+        if let existing = tabs.first(where: { $0 !== tab && $0.notes?.document.id == document.id }) {
+            existing.page = .notes
+            existing.notes?.showingList = false
+            activate(existing)
+        } else {
+            tab.notes?.select(document)
+            refreshTabs()
         }
     }
 
@@ -572,9 +720,22 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         }
     }
 
+    func setEmphasis(_ emphasis: WindowGroupController.Emphasis) {
+        guard !isDisposed, self.emphasis != emphasis else { return }
+        self.emphasis = emphasis
+        alphaValue = (currentState?.opacity ?? 1) * (emphasis == .dimmed ? 0.22 : 1)
+        (contentView as? PanelShadowView)?.highlighted = emphasis == .highlighted
+        applyTransparency()
+        if emphasis == .highlighted && isVisible { orderFrontRegardless() }
+        synchronizeLockRecovery()
+    }
+
     private func applyTransparency() {
         (contentView as? PanelShadowView)?.shadowStrength = backgroundOpacity
-        chrome.setContentOpacity(background: backgroundOpacity, content: contentOpacity, revealToolbar: revealingToolbar)
+        let highlighted = emphasis == .highlighted
+        chrome.setContentOpacity(background: highlighted ? max(0.9, backgroundOpacity) : backgroundOpacity,
+                                 content: highlighted ? max(0.9, contentOpacity) : contentOpacity,
+                                 revealToolbar: revealingToolbar)
     }
 
     func revealTransparencySettings() {
@@ -725,6 +886,7 @@ private final class PanelResizeHandle: NSView {
 @MainActor
 private final class PanelShadowView: NSView {
     weak var chrome: MiniWindowChromeView?
+    var highlighted = false { didSet { needsDisplay = true } }
 
     func hasControl(at point: NSPoint) -> Bool {
         var view = chrome?.hitTest(point)
@@ -789,6 +951,12 @@ private final class PanelShadowView: NSView {
             let ring = NSBezierPath(roundedRect: rect, xRadius: 8 + distance, yRadius: 8 + distance)
             ring.lineWidth = 1
             NSColor.black.withAlphaComponent(opacity * shadowStrength).setStroke()
+            ring.stroke()
+        }
+        if highlighted {
+            let ring = NSBezierPath(roundedRect: bodyRect.insetBy(dx: -1, dy: -1), xRadius: 9, yRadius: 9)
+            ring.lineWidth = 2
+            NSColor(srgbRed: 0.19, green: 0.55, blue: 0.45, alpha: 1).setStroke()
             ring.stroke()
         }
     }

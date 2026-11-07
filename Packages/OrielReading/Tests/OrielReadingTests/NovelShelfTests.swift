@@ -79,3 +79,22 @@ extension NovelShelfTests {
         XCTAssertEqual(chapters.first?.text, "书还在。")
     }
 }
+
+extension NovelShelfTests {
+    func testExportedShelfReopensIndependentlyAndLeavesSourceIntact() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shelf = NovelShelf(root: root.appending(path: "source"))
+        let book = try await shelf.add(data: Data("第一章\n独立的阅读副本。".utf8), name: "导出测试.txt")
+        let destination = root.appending(path: "export")
+        try await shelf.exportSnapshot(to: destination)
+        let copy = NovelShelf(root: destination)
+        let copiedBooks = try await copy.books()
+        XCTAssertEqual(copiedBooks, [book])
+        let chapters = try await copy.chapters(of: book)
+        XCTAssertEqual(chapters.first?.text, "独立的阅读副本。")
+        try await copy.remove(book)
+        let originals = try await shelf.books()
+        XCTAssertEqual(originals, [book])
+    }
+}

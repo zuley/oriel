@@ -10,6 +10,7 @@ final class NovelLibrary: ObservableObject {
     @Published private(set) var books: [ShelfBook] = []
     let removedBook = PassthroughSubject<String, Never>()
     private var revision = 0
+    private var lastActiveBookID: String?
 
     init(root: URL? = nil, defaults: UserDefaults = .standard) {
         places = ReadingPlaces(defaults: defaults)
@@ -22,6 +23,16 @@ final class NovelLibrary: ObservableObject {
         let version = revision
         let result = try await shelf.books()
         if version == revision { books = result }
+    }
+
+    func savePlace(book: String, chapter: Int, offset: Int) {
+        let previous = places.place(for: book)
+        places.save(book: book, chapter: chapter, offset: offset)
+        // The manager needs chapter/recent-order changes, not a redraw per scroll tick.
+        if lastActiveBookID != book || previous.chapter != chapter || previous.updated == nil {
+            lastActiveBookID = book
+            objectWillChange.send()
+        }
     }
 
     func addMark(book: ShelfBook, chapter: Int, offset: Int, excerpt: String) {
@@ -91,7 +102,7 @@ final class NovelSession: ObservableObject {
     func start() {
         // Reattaching an existing tab resumes reading even without a scroll event.
         if section == .reading, busy == nil, let book {
-            library.places.save(book: book.id, chapter: chapter, offset: offset)
+            library.savePlace(book: book.id, chapter: chapter, offset: offset)
         }
         guard !initialized else { return }
         initialized = true
@@ -177,13 +188,13 @@ final class NovelSession: ObservableObject {
         chapter = min(place.chapter, text.count - 1)
         offset = min(place.offset, (text[chapter].text as NSString).length)
         section = .reading
-        library.places.save(book: saved.id, chapter: chapter, offset: offset)
+        library.savePlace(book: saved.id, chapter: chapter, offset: offset)
     }
 
     func saveOffset(_ position: Int, bookID: String, index: Int) {
         guard book?.id == bookID, index == chapter, section == .reading, position != offset else { return }
         offset = position
-        library.places.save(book: bookID, chapter: index, offset: position)
+        library.savePlace(book: bookID, chapter: index, offset: position)
     }
 
     func turn(to index: Int) {
@@ -192,7 +203,7 @@ final class NovelSession: ObservableObject {
         if index != chapter {
             offset = 0
             chapter = index
-            library.places.save(book: book.id, chapter: index, offset: 0)
+            library.savePlace(book: book.id, chapter: index, offset: 0)
         }
         section = .reading
     }
@@ -203,7 +214,7 @@ final class NovelSession: ObservableObject {
         offset = min(max(0, requested), count)
         chapter = index
         highlight = length > 0 ? NSRange(location: offset, length: min(length, count - offset)) : nil
-        library.places.save(book: book.id, chapter: index, offset: offset)
+        library.savePlace(book: book.id, chapter: index, offset: offset)
         section = .reading
     }
 
@@ -274,6 +285,7 @@ final class NovelSession: ObservableObject {
     }
 
     private func run(label: String?, retry: Request? = nil, _ action: @escaping @MainActor () async throws -> Void) {
+        initialized = true
         cancel()
         retryRequest = nil
         notice = nil

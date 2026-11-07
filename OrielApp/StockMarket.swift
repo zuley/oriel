@@ -189,6 +189,7 @@ final class StockWatchlist: ObservableObject {
     private let defaults: UserDefaults
     private let fetchQuotes: @Sendable ([StockSymbol]) async throws -> [String: StockQuote]
     private let key = "watchlist.symbols.v1"
+    private var visibilityOwners = Set<String>()
     private var ticker: Task<Void, Never>?
     private var request: Task<Void, Never>?
     private var lastQuoteUpdate: ContinuousClock.Instant?
@@ -201,7 +202,9 @@ final class StockWatchlist: ObservableObject {
         symbols = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode([StockSymbol].self, from: $0) } ?? StockSymbol.initial
     }
 
-    func setVisible(_ visible: Bool) {
+    func setVisible(_ visible: Bool, owner: String = "panel") {
+        if visible { visibilityOwners.insert(owner) } else { visibilityOwners.remove(owner) }
+        let visible = !visibilityOwners.isEmpty
         guard visible != (ticker != nil) else { return }
         if visible {
             let remaining = lastQuoteUpdate.map { Self.interval - $0.duration(to: .now) } ?? .zero

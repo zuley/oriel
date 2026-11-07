@@ -23,6 +23,12 @@ if [[ ${#core_sources[@]} -eq 0 ]]; then
 fi
 
 app_sources=(
+  "$project_root/OrielApp/MiniWindowSession.swift"
+  "$project_root/OrielApp/DataExport.swift"
+  "$project_root/OrielApp/ManagementSettingsView.swift"
+  "$project_root/OrielApp/ManagementView.swift"
+  "$project_root/OrielApp/ManagementWindow.swift"
+  "$project_root/OrielApp/AppPreferences.swift"
   "$project_root/OrielApp/OrielApp.swift"
   "$project_root/OrielApp/AppModel.swift"
   "$project_root/OrielApp/MiniPanel.swift"
@@ -32,6 +38,9 @@ app_sources=(
   "$project_root/OrielApp/StocksView.swift"
   "$project_root/OrielApp/NovelSession.swift"
   "$project_root/OrielApp/NovelView.swift"
+  "$project_root/OrielApp/NotesStore.swift"
+  "$project_root/OrielApp/NotesWorkspace.swift"
+  "$project_root/OrielApp/NotesView.swift"
   "$project_root/OrielApp/MiniWindowChromeView.swift"
 )
 

@@ -29,6 +29,25 @@
 		B10000000000000000000003 /* OrielReading in Frameworks */ = {isa = PBXBuildFile; productRef = B90000000000000000000001 /* OrielReading */; };
 		B10000000000000000000004 /* StockMarket.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* StockMarket.swift */; };
 		B10000000000000000000005 /* StockWatchlistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* StockWatchlistTests.swift */; };
+		B10000000000000000000006 = {isa = PBXBuildFile; fileRef = B20000000000000000000004; };
+		B10000000000000000000007 = {isa = PBXBuildFile; fileRef = A20000000000000000000009; };
+		A10000000000000000000021 /* NotesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021; };
+		B10000000000000000000021 /* NotesStore.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021; };
+		A10000000000000000000022 /* NotesWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022; };
+		B10000000000000000000022 /* NotesWorkspace.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022; };
+		A10000000000000000000023 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023; };
+		B10000000000000000000008 = {isa = PBXBuildFile; fileRef = B20000000000000000000005; };
+		B10000000000000000000023 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* NotesView.swift */; };
+B10000000000000000000030 = {isa = PBXBuildFile; fileRef = B20000000000000000000030; };
+A10000000000000000000024 = {isa = PBXBuildFile; fileRef = A20000000000000000000024; };
+B10000000000000000000024 = {isa = PBXBuildFile; fileRef = A20000000000000000000024; };
+B10000000000000000000031 = {isa = PBXBuildFile; fileRef = B20000000000000000000031; };
+A10000000000000000000025 = {isa = PBXBuildFile; fileRef = A20000000000000000000025; };
+A10000000000000000000026 = {isa = PBXBuildFile; fileRef = A20000000000000000000026; };
+A10000000000000000000028 = {isa = PBXBuildFile; fileRef = A20000000000000000000028; };
+A10000000000000000000029 = {isa = PBXBuildFile; fileRef = A20000000000000000000029; };
+B10000000000000000000029 = {isa = PBXBuildFile; fileRef = A20000000000000000000029; };
+A10000000000000000000030 = {isa = PBXBuildFile; fileRef = A20000000000000000000030; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +71,19 @@
 		B20000000000000000000001 /* NovelSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelSessionTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* OrielAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OrielAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B20000000000000000000003 /* StockWatchlistTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockWatchlistTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChromeLayoutTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000021 /* NotesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesStore.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* NotesWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesWorkspace.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
+		B20000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesWorkspaceTests.swift; sourceTree = "<group>"; };
+B20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferencesTests.swift; sourceTree = "<group>"; };
+A20000000000000000000024 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
+B20000000000000000000031 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExportTests.swift; sourceTree = "<group>"; };
+A20000000000000000000025 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementWindow.swift; sourceTree = "<group>"; };
+A20000000000000000000026 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementView.swift; sourceTree = "<group>"; };
+A20000000000000000000028 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementSettingsView.swift; sourceTree = "<group>"; };
+A20000000000000000000029 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExport.swift; sourceTree = "<group>"; };
+A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniWindowSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +110,15 @@
 		A40000000000000000000002 /* OrielApp */ = {
 			isa = PBXGroup;
 			children = (
+				A20000000000000000000021 /* NotesStore.swift */,
+				A20000000000000000000022 /* NotesWorkspace.swift */,
+				A20000000000000000000023 /* NotesView.swift */,
+				A20000000000000000000024,
+				A20000000000000000000025,
+				A20000000000000000000026,
+				A20000000000000000000028,
+				A20000000000000000000029,
+				A20000000000000000000030,
 				A20000000000000000000001 /* OrielApp.swift */,
 				A20000000000000000000002 /* AppModel.swift */,
 				A20000000000000000000003 /* MiniPanel.swift */,
@@ -117,7 +158,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		B40000000000000000000001 /* OrielAppTests */ = {isa = PBXGroup; children = (B20000000000000000000001 /* NovelSessionTests.swift */, B20000000000000000000003 /* StockWatchlistTests.swift */,); path = OrielAppTests; sourceTree = "<group>"; };
+		B40000000000000000000001 /* OrielAppTests */ = {isa = PBXGroup; children = (B20000000000000000000031, B20000000000000000000030, B20000000000000000000005, B20000000000000000000004 /* WindowChromeLayoutTests.swift */, B20000000000000000000001 /* NovelSessionTests.swift */, B20000000000000000000003 /* StockWatchlistTests.swift */,); path = OrielAppTests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -194,6 +235,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000021 /* NotesStore.swift in Sources */,
+				A10000000000000000000022 /* NotesWorkspace.swift in Sources */,
+				A10000000000000000000023 /* NotesView.swift in Sources */,
+				A10000000000000000000024,
+				A10000000000000000000025,
+				A10000000000000000000026,
+				A10000000000000000000028,
+				A10000000000000000000029,
+				A10000000000000000000030,
 				A10000000000000000000001 /* OrielApp.swift in Sources */,
 				A10000000000000000000002 /* AppModel.swift in Sources */,
 				A10000000000000000000003 /* MiniPanel.swift in Sources */,
@@ -207,7 +257,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10000000000000000000001 /* NovelSessionTests.swift in Sources */, B10000000000000000000002 /* NovelSession.swift in Sources */, B10000000000000000000004 /* StockMarket.swift in Sources */, B10000000000000000000005 /* StockWatchlistTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		B30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10000000000000000000029, B10000000000000000000031, B10000000000000000000024, B10000000000000000000030, B10000000000000000000023, B10000000000000000000008, B10000000000000000000022, B10000000000000000000021, B10000000000000000000006 /* WindowChromeLayoutTests.swift in Sources */, B10000000000000000000007 /* MiniWindowChromeView.swift in Sources */, B10000000000000000000001 /* NovelSessionTests.swift in Sources */, B10000000000000000000002 /* NovelSession.swift in Sources */, B10000000000000000000004 /* StockMarket.swift in Sources */, B10000000000000000000005 /* StockWatchlistTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

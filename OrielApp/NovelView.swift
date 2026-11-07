@@ -7,7 +7,7 @@ struct NovelView: View {
     @ObservedObject var library: NovelLibrary
     var chooseFile: () -> Void
     @AppStorage("novel.simplified") private var simplified = false
-    @AppStorage("novel.font.size") private var fontSize = 16
+    @AppStorage("novel.font.size") private var fontSize = 13
     @StateObject private var discovery = CatalogDiscovery()
     @State private var query = ""
     @State private var removing: ShelfBook?
@@ -226,52 +226,52 @@ struct NovelView: View {
         }.menuStyle(.borderlessButton).fixedSize().accessibilityLabel("选书")
     }
 
-    @State private var focusReading = false
     @ViewBuilder private func reading(size: CGSize) -> some View {
         if let book = session.book, session.chapters.indices.contains(session.chapter) {
             let index = session.chapter
-            let pocket = size.height < 68 || focusReading
+            let pocket = size.height < 68
             let compact = size.height < 90 || size.width < 155
             let page = NovelPageView(bookID: book.id, chapter: session.chapters[index], index: index, offset: session.offset,
                                      highlight: session.highlight, simplified: simplified, fontSize: min(CGFloat(fontSize), max(10, (size.height - 3) * 0.64)),
                                      onPosition: { session.saveOffset($0, bookID: book.id, index: index) },
                                      onTurn: { session.turn(to: index + $0) },
                                      onPreviousChapterEnd: { session.jump(to: index - 1, offset: .max) })
-            if pocket {
-                HStack(alignment: .top, spacing: 0) {
-                    page
-                    readingMenu(book, index: index, pocket: true, compact: true, canFocus: size.height >= 68)
-                }
-            } else {
+            if !pocket {
                 HStack(spacing: 2) {
                     icon("chevron.left", "返回书架") { session.showShelf() }
                     if size.width > 120 { Text(book.title).font(.system(size: 11, weight: .medium)).lineLimit(1) }
                     Spacer(minLength: 0)
                     if compact { icon("list.bullet", "章节目录") { session.section = .contents } }
-                    readingMenu(book, index: index, pocket: false, compact: compact, canFocus: true)
+                    readingMenu(book, index: index, pocket: false, compact: compact)
                 }.padding(.horizontal, 3)
                 Divider()
+            }
+            // Keep the native text view alive across compact layout changes.
+            HStack(alignment: .top, spacing: 0) {
                 page
-                if !compact {
-                    Divider()
-                    HStack {
-                        icon("chevron.left", "上一章") { session.turn(to: index - 1) }.disabled(index == 0)
-                        Spacer(minLength: 0)
-                        Button { session.section = .contents } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "list.bullet")
-                                Text("\(index + 1) / \(book.chapterCount)").monospacedDigit()
-                            }.font(.system(size: 11)).frame(height: 22)
-                        }.accessibilityLabel("章节目录").accessibilityValue("\(index + 1) / \(book.chapterCount)")
-                        Spacer(minLength: 0)
-                        icon("chevron.right", "下一章") { session.turn(to: index + 1) }.disabled(index + 1 == book.chapterCount)
-                    }.padding(.horizontal, 4)
+                if pocket {
+                    readingMenu(book, index: index, pocket: true, compact: true)
                 }
+            }
+            if !pocket && !compact {
+                Divider()
+                HStack {
+                    icon("chevron.left", "上一章") { session.turn(to: index - 1) }.disabled(index == 0)
+                    Spacer(minLength: 0)
+                    Button { session.section = .contents } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "list.bullet")
+                            Text("\(index + 1) / \(book.chapterCount)").monospacedDigit()
+                        }.font(.system(size: 11)).frame(height: 22)
+                    }.accessibilityLabel("章节目录").accessibilityValue("\(index + 1) / \(book.chapterCount)")
+                    Spacer(minLength: 0)
+                    icon("chevron.right", "下一章") { session.turn(to: index + 1) }.disabled(index + 1 == book.chapterCount)
+                }.padding(.horizontal, 4)
             }
         }
     }
 
-    private func readingMenu(_ book: ShelfBook, index: Int, pocket: Bool, compact: Bool, canFocus: Bool) -> some View {
+    private func readingMenu(_ book: ShelfBook, index: Int, pocket: Bool, compact: Bool) -> some View {
         Menu {
             if pocket {
                 Button("返回书架") { session.showShelf() }
@@ -294,7 +294,6 @@ struct NovelView: View {
                 }
             }
             Toggle("简体阅读", isOn: $simplified)
-            if canFocus { Button(focusReading ? "退出专注阅读" : "专注阅读") { focusReading.toggle() } }
             if let source = book.sourcePage {
                 Link("书源 · Project Gutenberg", destination: source)
                 Button("在访达中查看原文") { session.showOriginal() }

@@ -122,6 +122,27 @@ public actor NovelShelf {
         return chapters
     }
 
+    public func exportSnapshot(to destination: URL) throws {
+        // This synchronous actor turn cannot interleave with a shelf mutation.
+        guard files.fileExists(atPath: root.path) else {
+            try files.createDirectory(at: destination, withIntermediateDirectories: true)
+            return
+        }
+        try validateExportTree(root)
+        try files.copyItem(at: root, to: destination)
+    }
+
+    private func validateExportTree(_ url: URL) throws {
+        try Task.checkCancellation()
+        let values = try url.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+        guard values.isSymbolicLink != true else { throw ReadingError.damaged }
+        if values.isDirectory == true {
+            for item in try files.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) {
+                try validateExportTree(item)
+            }
+        }
+    }
+
     public func remove(_ book: ShelfBook) throws { try files.removeItem(at: directory(of: book)) }
 
     public func original(of book: ShelfBook) throws -> URL { try directory(of: book).appending(path: "original.txt") }

@@ -1,0 +1,96 @@
+Oriel notes verification · 2026-11-07
+macOS 26.6.2 (25G83), arm64; Xcode 27.2 (27B52)
+Counts: app 14 (notes 9), core 33, reading 23 + reader UI 2, terminal 2; total 74 unique tests.
+
+Application — /tmp/oriel-notes-delivery-tests.log
+Test Suite 'All tests' started at 2026-11-07 16:03:27.468.
+Test Case '-[OrielAppTests.NotesWorkspaceTests testAutosaveCoalescesTypingButSavesContinuousInputWithinTwoSeconds]' passed (0.003 seconds).
+Test Case '-[OrielAppTests.NotesWorkspaceTests testAutosaveDoesNotInterruptAnInProgressInputMethodComposition]' passed (0.116 seconds).
+Test Case '-[OrielAppTests.NotesWorkspaceTests testCorruptNoteRecoversPreviousVersionAndDoesNotHideOtherNotes]' passed (0.003 seconds).
+Test Case '-[OrielAppTests.NotesWorkspaceTests testFailedSaveKeepsLatestTextDirtyAndRetryRestoresIt]' passed (0.002 seconds).
+Test Case '-[OrielAppTests.NotesWorkspaceTests testNativeEditorCommitsMarkedTextAndSupportsUndoAndRedo]' passed (0.008 seconds).
+Test Case '-[OrielAppTests.NotesWorkspaceTests testNativeEditorRejectsOversizedUnicodeWithoutChangingTextOrSelection]' passed (0.008 seconds).
+Test Case '-[OrielAppTests.NotesWorkspaceTests testOrganizingNotesPersistsPinTrashAndRestoreWithoutChangingIdentity]' passed (0.003 seconds).
+Test Case '-[OrielAppTests.NotesWorkspaceTests testTypingAndSavingRestoresExactUnicodeTextInANewWorkspace]' passed (0.001 seconds).
+Test Case '-[OrielAppTests.NotesWorkspaceTests testUnknownVersionIsPreservedAndEmptySavedNotesRemainRecoverable]' passed (0.005 seconds).
+Test Case '-[OrielAppTests.NovelSessionTests testClosingReaderDuringImportReleasesSessionWithoutOpeningBook]' passed (0.017 seconds).
+Test Case '-[OrielAppTests.NovelSessionTests testRemovingBookReturnsBothReadersToShelfAndClearsItsPlaces]' passed (0.041 seconds).
+Test Case '-[OrielAppTests.NovelSessionTests testReturningToAnExistingReaderRestoresItsChapterAndOffsetForReopen]' passed (0.053 seconds).
+Test Case '-[OrielAppTests.StockWatchlistTests testRapidRevealReusesSuccessfulQuoteWhileExplicitRefreshAndNewSymbolsFetch]' passed (0.021 seconds).
+Test Case '-[OrielAppTests.WindowImmersionTests testImmersionSurvivesContentAndTabChangesAndRestoresChrome]' passed (0.031 seconds).
+Test Suite 'All tests' passed at 2026-11-07 16:03:27.783.
+** TEST SUCCEEDED **
+
+Window behavior — /tmp/oriel-notes-OrielCore-tests.log
+Test Suite 'All tests' started at 2026-11-07 15:56:59.099.
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testAllOuterAndInnerBoundariesCanWakeHiddenWindow]' passed (0.001 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testChangedFrameDiscardsPointerHistoryFromPreviousGeometry]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testClosedWindowCannotBeRevivedByPointerOrRecovery]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testCreatedWindowStartsVisibleUnlockedWithoutAutomaticHiding]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testCreatingWhileWindowExistsPreservesItsConfiguration]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testDisablingAutomaticHidingShowsWindowWithoutUnlockingIt]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testEditingKeepsVisibleUntilFocusLeavesButCannotOverrideLock]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testEnablingAutomaticHidingKeepsWindowVisibleUnderPointer]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testEndingGeometryChangePreservesVisibilityInsideOrWhenAutomaticHidingIsOff]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testEndingGeometryChangeUsesFinalFrameAndCurrentPointer]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testFastPassAcrossEntireWindowDoesNotFlashIt]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testFastPointerEntryAcrossEdgeWakesWindow]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testFrameChangesFromClosedWindowCannotMoveNewWindow]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testGeometryChangeKeepsVisibleWindowOpenWhilePointerLeaves]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testHiddenOrLockedWindowsCannotBeginGeometryChanges]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testHiddenWindowDoesNotWakeWhenFirstSampleIsAtCenter]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testHidePreservesWindowConfigurationAndPreventsPointerReveal]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testHideRecoveryAndCloseEndGeometryChanges]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testInvalidFrameChangesPreserveStateAndPointerHistory]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testLeavingAnySideHidesWindowAndRepeatedOutsideSamplesDoNotWakeIt]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testLockChangesPreserveVisibilityAndAutomaticHiding]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testLockedHiddenWindowRevealsAtEdgeWithoutLosingLockOrOpacity]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testLockingInterruptsGeometryChangeAndResumesAutomaticHiding]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testOldGeometryCommandsCannotInterruptCurrentWindowGesture]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testOldWindowSamplesCannotArmNewWindowForCentralReveal]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testOrdinaryLockingPreservesPointerHistoryForFastEntry]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testPointerSamplesCannotHideRecoveredWindow]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testRecoveryShowsUnlocksAndDisablesAutomaticHiding]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testRecreatedWindowIgnoresSamplesFromClosedWindow]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testReenablingAutomaticHidingStartsWithoutOldPointerHistory]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testRevealedWindowRemainsVisibleWhenPointerMovesIntoContent]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testUnchangedFramePreservesPointerHistoryForFastEntry]' passed (0.000 seconds).
+Test Case '-[OrielCoreTests.WindowBehaviorControllerTests testUpdatedFrameMovesWakeZoneAndPreservesWindowConfiguration]' passed (0.000 seconds).
+Test Suite 'All tests' passed at 2026-11-07 15:56:59.105.
+
+Reading and viewport — /tmp/oriel-notes-OrielReading-tests.log
+Test Suite 'All tests' started at 2026-11-07 15:56:59.998.
+Test Case '-[OrielReadingTests.CatalogTests testBadMirrorFallsBackThenAnOfflineReopenMakesNoRequest]' passed (0.003 seconds).
+Test Case '-[OrielReadingTests.CatalogTests testBothMirrorsUnavailableLeavesShelfReadyForRetry]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.CatalogTests testCancellingAnInFlightRequestDoesNotTryAnotherMirrorOrCreateBook]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.CatalogTests testOnlineSearchAcceptsOnlyBookEntriesAndReusesCuratedNames]' passed (0.004 seconds).
+Test Case '-[OrielReadingTests.CatalogTests testWrongEditionWithTheSameTitleIsRejectedAndExplained]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.NovelEPUBTests testEPUBNavigationSplitsSharedSpineFileAndPreservesPreformattedLines]' passed (0.002 seconds).
+Test Case '-[OrielReadingTests.NovelEPUBTests testExplicitlyNonlinearItemCanBeSkipped]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.NovelEPUBTests testSpineOrderMetadataAndReadableText]' passed (0.001 seconds).
+Test Case '-[OrielReadingTests.NovelEPUBTests testUnresolvedRequiredChapterRejectsImportWithoutCreatingPartialBook]' passed (0.002 seconds).
+Test Case '-[OrielReadingTests.NovelSearchTests testChapterAndShelfFilterMatchesBothScriptsAndFullWidthLetters]' passed (0.002 seconds).
+Test Case '-[OrielReadingTests.NovelSearchTests testSimplifiedSearchJumpsToOriginalUTF16OffsetAfterEmoji]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.NovelShelfTests testBatchImportKeepsHealthyBooksAndIdentifiesFilesThatCanBeRetried]' passed (0.003 seconds).
+Test Case '-[OrielReadingTests.NovelShelfTests testLargeOrBrokenFileDoesNotCreatePartialEntry]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.NovelShelfTests testReimportRepairsAnIncompleteCachedBookWithoutChangingItsIdentity]' passed (0.003 seconds).
+Test Case '-[OrielReadingTests.NovelShelfTests testReopenWithoutOriginalDeduplicatesAndRemovesOnlyLibraryCopy]' passed (0.001 seconds).
+Test Case '-[OrielReadingTests.NovelTextTests testCatalogPrintWrapsAndRepeatedRunningHeadingStayInOneChapter]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.NovelTextTests testCommonLocalEncodingsAndUnreadableFiles]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.NovelTextTests testLocalTextPreservesPreludeParagraphsAndRecognizesChineseChapters]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.NovelTextTests testLongNamedChapterKeepsOneEntryAndGutenbergPreservesActualPreface]' passed (0.002 seconds).
+Test Case '-[OrielReadingTests.NovelTextTests testSimplifiedReadingPreservesOriginalSearchAndBookmarkOffsets]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.NovelTextTests testVolumeAndPlainTableOfContentsDoNotOpenOnEmptyChapters]' passed (0.000 seconds).
+Test Case '-[OrielReadingTests.ReadingPlaceTests testBookmarksKeepExactPositionAndAreRemovedWithTheirBook]' passed (0.002 seconds).
+Test Case '-[OrielReadingTests.ReadingPlaceTests testPlaceSurvivesNewInstanceAndIsScopedToBook]' passed (0.001 seconds).
+Test Suite 'All tests' passed at 2026-11-07 15:57:00.028.
+Test Suite 'All tests' started at 2026-11-07 15:57:00.100.
+Test Case '-[OrielReaderUITests.ReaderViewportTests testFirstLineIsVisibleAndReflowRetainsTheReadingPassage]' passed (0.124 seconds).
+Test Case '-[OrielReaderUITests.ReaderViewportTests testSpaceContinuesToNextChapterWhenThePageAlreadyFits]' passed (0.003 seconds).
+Test Suite 'All tests' passed at 2026-11-07 15:57:00.229.
+
+Terminal — /tmp/oriel-notes-OrielTerminal-tests.log
+Test Suite 'All tests' started at 2026-11-07 15:57:01.057.
+Test Case '-[OrielTerminalTests.SessionShutdownTests testCloseEndsForegroundJobIgnoringHangup]' passed (1.079 seconds).
+Test Case '-[OrielTerminalTests.SessionShutdownTests testQuitFlushesPendingJobShutdown]' passed (0.400 seconds).
+Test Suite 'All tests' passed at 2026-11-07 15:57:02.538.

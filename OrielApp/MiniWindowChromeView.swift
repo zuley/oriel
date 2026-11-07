@@ -11,6 +11,8 @@ final class MiniWindowChromeView: NSView {
         var openNovel: () -> Void = {}
         var dropNovel: ([URL]) -> Bool = { _ in false }
         var openStocks: () -> Void = {}
+        var openNotes: () -> Void = {}
+        var renameWindow: () -> Void = {}
         var toggleAutomaticHiding: () -> Void
         var settings: (NSView) -> Void
         var toggleLock: () -> Void
@@ -30,7 +32,9 @@ final class MiniWindowChromeView: NSView {
     private let lockButton: ChromeButton
     private var toolbarButtons: [ChromeButton] = []
     private var isLocked = false
+    private var hasMultipleTabs = false
     private let hoverTip = ChromeTooltipView(frame: .zero)
+    private let windowName = WindowNameLabel(labelWithString: "")
     private var hoverTimer: Timer?
     private weak var hoveredButton: ChromeButton?
 
@@ -50,6 +54,7 @@ final class MiniWindowChromeView: NSView {
 
         home.onOpenTerminal = actions.openTerminal
         home.onOpenNovel = actions.openNovel
+        home.onOpenNotes = actions.openNotes
         home.onDropNovel = actions.dropNovel
         home.onOpenStocks = actions.openStocks
         appearance = NSAppearance(named: .aqua)
@@ -70,6 +75,17 @@ final class MiniWindowChromeView: NSView {
             }
             addSubview(button)
         }
+        windowName.font = .systemFont(ofSize: 11, weight: .medium)
+        windowName.textColor = .secondaryLabelColor
+        windowName.alignment = .center
+        windowName.lineBreakMode = .byTruncatingTail
+        windowName.maximumNumberOfLines = 1
+        windowName.setAccessibilityLabel("窗口名称")
+        windowName.onRename = { [weak self] in
+            guard let self, !self.isLocked else { return }
+            actions.renameWindow()
+        }
+        addSubview(windowName)
 
         addSubview(content)
         content.addSubview(home)
@@ -90,6 +106,7 @@ final class MiniWindowChromeView: NSView {
         super.layout()
         dismissTooltip()
         let narrow = bounds.width < 168
+        tabBar.isHidden = !hasMultipleTabs
         let centers: [CGFloat?] = [
             narrow ? 40 : 60, usesCompactToolbar ? nil : bounds.width - 74,
             bounds.width - (narrow ? 42 : 46), Self.lockControlFrame(for: bounds.width).midX,
@@ -98,13 +115,19 @@ final class MiniWindowChromeView: NSView {
         for (button, center) in zip(toolbarButtons, centers) {
             button.isHidden = center == nil || (isLocked && button === lockButton)
             if let center {
-                let width: CGFloat = button.isWindowControl ? (narrow ? 16 : 18) : (narrow && button !== lockButton ? 16 : 28)
+                let width: CGFloat = button.isWindowControl ? (narrow ? 16 : 18)
+                    : (narrow && button !== lockButton ? 16 : 28)
                 button.frame = NSRect(x: center - width / 2, y: 0, width: width, height: 28)
             }
         }
+        let nameStart = toolbarButtons[0].frame.maxX + 4
+        let nameEnd = (usesCompactToolbar ? settingsButton : automaticHidingButton).frame.minX - 4
+        let nameWidth = max(0, nameEnd - nameStart)
+        windowName.frame = NSRect(x: nameStart, y: 6, width: nameWidth, height: 16)
+        windowName.isHidden = nameWidth < 24
         tabBar.frame = NSRect(x: 6, y: 28, width: max(0, bounds.width - 12),
                               height: tabBar.isHidden ? 0 : 24)
-        let contentTop = tabBar.frame.maxY + 4
+        let contentTop: CGFloat = tabBar.frame.maxY + 4
         content.frame = NSRect(x: 6, y: contentTop, width: max(0, bounds.width - 12),
                                height: max(0, bounds.height - contentTop - 6))
         home.frame = content.bounds
@@ -149,8 +172,15 @@ final class MiniWindowChromeView: NSView {
         webHost.isHidden = true
     }
 
+    func setWindowName(_ name: String) {
+        windowName.stringValue = name
+        windowName.toolTip = name
+        needsLayout = true
+    }
+
     func setTabs(_ tabs: [(Int, String)], selected: Int) {
-        tabBar.isHidden = tabs.count < 2
+        hasMultipleTabs = tabs.count > 1
+        tabBar.isHidden = !hasMultipleTabs
         tabBar.setTabs(tabs, selected: selected)
         needsLayout = true
     }
@@ -185,6 +215,7 @@ final class MiniWindowChromeView: NSView {
 
     func setContentOpacity(background: CGFloat, content: CGFloat, revealToolbar: Bool = false) {
         tabBar.alphaValue = background
+        windowName.alphaValue = revealToolbar ? 1 : background
         layer?.backgroundColor = ChromePalette.background.withAlphaComponent(background).cgColor
         for button in toolbarButtons {
             button.restingOpacity = revealToolbar ? 1 : background
@@ -248,6 +279,17 @@ final class MiniWindowChromeView: NSView {
         }
         hoverTimer = timer
         RunLoop.main.add(timer, forMode: .common)
+    }
+}
+
+@MainActor
+private final class WindowNameLabel: NSTextField {
+    var onRename: (() -> Void)?
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    // Keep the title part of the draggable toolbar, while retaining native tooltips.
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 { onRename?() }
+        else { nextResponder?.mouseDown(with: event) }
     }
 }
 
@@ -493,6 +535,7 @@ private final class ChromeClippingView: NSView {
 private final class ChromeHomeView: NSView {
     var onOpenTerminal: (() -> Void)?
     var onOpenNovel: (() -> Void)?
+    var onOpenNotes: (() -> Void)?
     var onDropNovel: (([URL]) -> Bool)?
     var onOpenStocks: (() -> Void)?
     private let stockButton = HomeTileButton(title: "自选股", target: nil, action: nil)
@@ -500,6 +543,7 @@ private final class ChromeHomeView: NSView {
     private let heading: NSTextField
     private let subtitle: NSTextField
     private let novelButton = HomeTileButton(title: "小说", target: nil, action: nil)
+    private let notesButton = HomeTileButton(title: "便签", target: nil, action: nil)
     private var backgroundOpacity: CGFloat = 1
 
     override var isFlipped: Bool { true }
@@ -544,6 +588,13 @@ private final class ChromeHomeView: NSView {
         stockButton.target = self
         stockButton.action = #selector(openStocks)
         addSubview(stockButton)
+        notesButton.isBordered = false
+        notesButton.font = terminalButton.font
+        notesButton.image = NSImage(systemSymbolName: "note.text", accessibilityDescription: nil)
+        notesButton.setAccessibilityLabel("便签")
+        notesButton.target = self
+        notesButton.action = #selector(openNotes)
+        addSubview(notesButton)
         registerForDraggedTypes([.fileURL])
         setActionsEnabled(true)
     }
@@ -572,7 +623,7 @@ private final class ChromeHomeView: NSView {
     }
 
     func setActionsEnabled(_ enabled: Bool) {
-        for button in [terminalButton, novelButton, stockButton] {
+        for button in [terminalButton, novelButton, stockButton, notesButton] {
             button.isEnabled = enabled
             button.toolTip = enabled ? "打开" + button.title : nil
         }
@@ -581,6 +632,7 @@ private final class ChromeHomeView: NSView {
     required init?(coder: NSCoder) { nil }
 
     @objc private func openNovel() { onOpenNovel?() }
+    @objc private func openNotes() { onOpenNotes?() }
     @objc private func openStocks() { onOpenStocks?() }
     @objc private func openTerminal() { onOpenTerminal?() }
 
@@ -601,21 +653,16 @@ private final class ChromeHomeView: NSView {
         super.layout()
         for label in [heading, subtitle] { label.isHidden = isCompact }
         let origin = NSPoint(x: (bounds.width - 240) / 2, y: (bounds.height - 240) / 2)
-        let compactSide = min(40, bounds.height, max(0, bounds.width - 4) / 3)
-        terminalButton.imagePosition = isCompact ? .imageOnly : .imageAbove
-        terminalButton.frame = isCompact
-            ? NSRect(x: bounds.midX - 1.5 * compactSide - 2, y: bounds.midY - compactSide / 2, width: compactSide, height: compactSide)
-            : NSRect(x: 20 + origin.x, y: 182 + origin.y, width: 56, height: 56)
+        let compactSide = min(40, bounds.height, max(0, bounds.width - 6) / 4)
+        for (index, button) in [terminalButton, novelButton, stockButton, notesButton].enumerated() {
+            button.imagePosition = isCompact ? .imageOnly : .imageAbove
+            button.frame = isCompact
+                ? NSRect(x: bounds.midX - (4 * compactSide + 6) / 2 + CGFloat(index) * (compactSide + 2),
+                         y: bounds.midY - compactSide / 2, width: compactSide, height: compactSide)
+                : NSRect(x: CGFloat(index) * 60 + origin.x, y: 182 + origin.y, width: 56, height: 56)
+        }
         heading.frame = NSRect(x: origin.x, y: 80 + origin.y, width: 240, height: 48)
         subtitle.frame = NSRect(x: 66 + origin.x, y: 144 + origin.y, width: 108, height: 20)
-        novelButton.imagePosition = terminalButton.imagePosition
-        novelButton.frame = isCompact
-            ? NSRect(x: bounds.midX - compactSide / 2, y: terminalButton.frame.minY, width: compactSide, height: compactSide)
-            : NSRect(x: 92 + origin.x, y: 182 + origin.y, width: 56, height: 56)
-        stockButton.imagePosition = terminalButton.imagePosition
-        stockButton.frame = isCompact
-            ? NSRect(x: bounds.midX + compactSide / 2 + 2, y: terminalButton.frame.minY, width: compactSide, height: compactSide)
-            : NSRect(x: 164 + origin.x, y: 182 + origin.y, width: 56, height: 56)
         needsDisplay = true
     }
 
@@ -637,8 +684,8 @@ private final class ChromeHomeView: NSView {
         divider.line(to: NSPoint(x: 224, y: 154))
         divider.stroke()
 
-        for index in 0..<3 {
-            let center = CGFloat(48 + index * 72)
+        for index in 0..<4 {
+            let center = CGFloat(28 + index * 60)
             NSColor.white.withAlphaComponent(backgroundOpacity).setFill()
             NSBezierPath(roundedRect: NSRect(x: center - 28, y: 182, width: 56, height: 56),
                          xRadius: 4, yRadius: 4).fill()
@@ -766,7 +813,7 @@ final class ChromeButton: NSButton {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let tracking { removeTrackingArea(tracking) }
-        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
                                   owner: self, userInfo: nil)
         addTrackingArea(area)
         tracking = area

@@ -2,20 +2,20 @@ import SwiftUI
 
 @main
 struct OrielApp: App {
-    @StateObject private var model = AppModel()
+    @NSApplicationDelegateAdaptor(OrielAppDelegate.self) private var appDelegate
+    @StateObject private var model = AppModel.shared
 
     var body: some Scene {
         MenuBarExtra {
-            if let window = model.snapshot {
-                if model.needsTransparencyRecovery {
-                    Button("找回小窗") { model.findWindow() }
-                    Divider()
-                } else if window.isLocked || !window.isVisible {
-                    Button("恢复小窗") { model.recover() }
-                    Divider()
+            Button("打开 Oriel") { model.showManagement() }
+            Button("新建小窗") { model.create() }
+            Divider()
+            if !model.windows.isEmpty {
+                Menu("恢复小窗") {
+                    ForEach(model.windows) { window in
+                        RecoveryMenuItem(window: window)
+                    }
                 }
-            } else {
-                Button("新建小窗") { model.create() }
                 Divider()
             }
             Button("退出 Oriel") { model.quit() }
@@ -25,6 +25,9 @@ struct OrielApp: App {
         }
         .menuBarExtraStyle(.menu)
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("设置…") { model.showManagement(section: .settings) }.keyboardShortcut(",")
+            }
             CommandMenu("小窗") {
                 WindowActions(model: model)
             }
@@ -37,21 +40,60 @@ private struct WindowActions: View {
 
     var body: some View {
         Button("新建小窗") { model.create() }
-            .disabled(model.snapshot != nil)
-        Toggle("锁定穿透", isOn: Binding(
-            get: { model.snapshot?.isLocked ?? false },
-            set: { model.setLocked($0) }
-        ))
-        .disabled(model.snapshot == nil)
-        Toggle("边缘唤醒", isOn: Binding(
-            get: { model.snapshot?.automaticHiding ?? false },
-            set: { model.setAutomaticHiding($0) }
-        ))
-        .disabled(model.snapshot == nil)
-        Divider()
-        Button("恢复小窗") { model.recover() }
-            .disabled(model.snapshot == nil)
-        Button("关闭小窗") { model.close() }
-            .disabled(model.snapshot == nil)
+        ForEach(model.windows) { window in
+            IndividualWindowMenu(window: window)
+        }
+    }
+}
+
+private struct RecoveryMenuItem: View {
+    @ObservedObject var window: MiniWindowSession
+    var body: some View {
+        Button(window.name) {
+            if window.needsTransparencyRecovery { window.findWindow() }
+            else { window.recover() }
+        }
+    }
+}
+
+private struct IndividualWindowMenu: View {
+    @ObservedObject var window: MiniWindowSession
+    var body: some View {
+        Menu(window.name) { IndividualWindowActions(window: window) }
+    }
+}
+
+private struct IndividualWindowActions: View {
+    @ObservedObject var window: MiniWindowSession
+    var body: some View {
+        Toggle("锁定穿透", isOn: Binding(get: { window.snapshot?.isLocked ?? false }, set: window.setLocked))
+        Toggle("边缘唤醒", isOn: Binding(get: { window.snapshot?.automaticHiding ?? false }, set: window.setAutomaticHiding))
+        Button("恢复小窗") { window.recover() }
+        Button("关闭小窗") { window.close() }
+    }
+}
+
+@MainActor
+final class OrielAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if AppModel.shared.preferences.openAtLaunch { NSApp.setActivationPolicy(.regular) }
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Present after SwiftUI has finished configuring the menu-bar scene.
+        DispatchQueue.main.async {
+            if AppModel.shared.preferences.openAtLaunch { AppModel.shared.showManagement() }
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        AppModel.shared.showManagement()
+        return true
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        NotesWorkspace.shared.confirmCanClose() ? .terminateNow : .terminateCancel
     }
 }
