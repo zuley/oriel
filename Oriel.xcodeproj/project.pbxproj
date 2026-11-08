@@ -9,14 +9,15 @@
 		A10000000000000000000001 /* OrielApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* OrielApp.swift */; };
 		A10000000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AppModel.swift */; };
 		A10000000000000000000003 /* MiniPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* MiniPanel.swift */; };
-		A10000000000000000000004 /* WebContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* WebContent.swift */; };
+		A10000000000000000000031 /* BrowserModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* BrowserModel.swift */; };
+		A10000000000000000000032 /* BrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* BrowserView.swift */; };
+		B10000000000000000000033 /* BrowserModel.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* BrowserModel.swift */; };
+		B10000000000000000000034 /* BrowserModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000032 /* BrowserModelTests.swift */; };
 		A10000000000000000000013 /* StockMarket.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* StockMarket.swift */; };
 		A10000000000000000000015 /* StockChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* StockChart.swift */; };
 		A10000000000000000000016 /* NovelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* NovelView.swift */; };
 		A10000000000000000000017 /* NovelSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* NovelSession.swift */; };
 		A10000000000000000000014 /* StocksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* StocksView.swift */; };
-		A10000000000000000000005 /* fixture.html in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* fixture.html */; };
-		A10000000000000000000006 /* detail.html in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* detail.html */; };
 		A10000000000000000000007 /* OrielCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* OrielCore */; };
 		A10000000000000000000009 /* MiniWindowChromeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* MiniWindowChromeView.swift */; };
 		A10000000000000000000010 /* OrielTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000004 /* OrielTerminal */; };
@@ -54,14 +55,14 @@ A10000000000000000000030 = {isa = PBXBuildFile; fileRef = A200000000000000000000
 		A20000000000000000000001 /* OrielApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrielApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* MiniPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPanel.swift; sourceTree = "<group>"; };
-		A20000000000000000000004 /* WebContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebContent.swift; sourceTree = "<group>"; };
+		A20000000000000000000031 /* BrowserModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserModel.swift; sourceTree = "<group>"; };
+		A20000000000000000000032 /* BrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserView.swift; sourceTree = "<group>"; };
+		B20000000000000000000032 /* BrowserModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserModelTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000013 /* StockMarket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockMarket.swift; sourceTree = "<group>"; };
 		A20000000000000000000015 /* StockChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChart.swift; sourceTree = "<group>"; };
 		A20000000000000000000016 /* NovelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelView.swift; sourceTree = "<group>"; };
 		A20000000000000000000017 /* NovelSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelSession.swift; sourceTree = "<group>"; };
 		A20000000000000000000014 /* StocksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StocksView.swift; sourceTree = "<group>"; };
-		A20000000000000000000005 /* fixture.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = fixture.html; sourceTree = "<group>"; };
-		A20000000000000000000006 /* detail.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = detail.html; sourceTree = "<group>"; };
 		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000008 /* Oriel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Oriel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000009 /* MiniWindowChromeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniWindowChromeView.swift; sourceTree = "<group>"; };
@@ -122,7 +123,8 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				A20000000000000000000001 /* OrielApp.swift */,
 				A20000000000000000000002 /* AppModel.swift */,
 				A20000000000000000000003 /* MiniPanel.swift */,
-				A20000000000000000000004 /* WebContent.swift */,
+				A20000000000000000000031 /* BrowserModel.swift */,
+				A20000000000000000000032 /* BrowserView.swift */,
 				A20000000000000000000013 /* StockMarket.swift */,
 				A20000000000000000000015 /* StockChart.swift */,
 				A20000000000000000000016 /* NovelView.swift */,
@@ -137,8 +139,6 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		A40000000000000000000003 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000005 /* fixture.html */,
-				A20000000000000000000006 /* detail.html */,
 				A20000000000000000000011 /* SwiftTerm-LICENSE.txt */,
 				A20000000000000000000019 /* ZIPFoundation-LICENSE.txt */,
 				A20000000000000000000012 /* OrielZsh */,
@@ -158,7 +158,7 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			name = Products;
 			sourceTree = "<group>";
 		};
-		B40000000000000000000001 /* OrielAppTests */ = {isa = PBXGroup; children = (B20000000000000000000031, B20000000000000000000030, B20000000000000000000005, B20000000000000000000004 /* WindowChromeLayoutTests.swift */, B20000000000000000000001 /* NovelSessionTests.swift */, B20000000000000000000003 /* StockWatchlistTests.swift */,); path = OrielAppTests; sourceTree = "<group>"; };
+		B40000000000000000000001 /* OrielAppTests */ = {isa = PBXGroup; children = (B20000000000000000000032, B20000000000000000000031, B20000000000000000000030, B20000000000000000000005, B20000000000000000000004 /* WindowChromeLayoutTests.swift */, B20000000000000000000001 /* NovelSessionTests.swift */, B20000000000000000000003 /* StockWatchlistTests.swift */,); path = OrielAppTests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -220,8 +220,6 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000005 /* fixture.html in Resources */,
-				A10000000000000000000006 /* detail.html in Resources */,
 				A10000000000000000000011 /* SwiftTerm-LICENSE.txt in Resources */,
 				A10000000000000000000019 /* ZIPFoundation-LICENSE.txt in Resources */,
 				A10000000000000000000012 /* OrielZsh in Resources */,
@@ -247,7 +245,8 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				A10000000000000000000001 /* OrielApp.swift in Sources */,
 				A10000000000000000000002 /* AppModel.swift in Sources */,
 				A10000000000000000000003 /* MiniPanel.swift in Sources */,
-				A10000000000000000000004 /* WebContent.swift in Sources */,
+				A10000000000000000000031 /* BrowserModel.swift in Sources */,
+				A10000000000000000000032 /* BrowserView.swift in Sources */,
 				A10000000000000000000013 /* StockMarket.swift in Sources */,
 				A10000000000000000000015 /* StockChart.swift in Sources */,
 				A10000000000000000000016 /* NovelView.swift in Sources */,
@@ -257,7 +256,7 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10000000000000000000029, B10000000000000000000031, B10000000000000000000024, B10000000000000000000030, B10000000000000000000023, B10000000000000000000008, B10000000000000000000022, B10000000000000000000021, B10000000000000000000006 /* WindowChromeLayoutTests.swift in Sources */, B10000000000000000000007 /* MiniWindowChromeView.swift in Sources */, B10000000000000000000001 /* NovelSessionTests.swift in Sources */, B10000000000000000000002 /* NovelSession.swift in Sources */, B10000000000000000000004 /* StockMarket.swift in Sources */, B10000000000000000000005 /* StockWatchlistTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		B30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10000000000000000000033, B10000000000000000000034, B10000000000000000000029, B10000000000000000000031, B10000000000000000000024, B10000000000000000000030, B10000000000000000000023, B10000000000000000000008, B10000000000000000000022, B10000000000000000000021, B10000000000000000000006 /* WindowChromeLayoutTests.swift in Sources */, B10000000000000000000007 /* MiniWindowChromeView.swift in Sources */, B10000000000000000000001 /* NovelSessionTests.swift in Sources */, B10000000000000000000002 /* NovelSession.swift in Sources */, B10000000000000000000004 /* StockMarket.swift in Sources */, B10000000000000000000005 /* StockWatchlistTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

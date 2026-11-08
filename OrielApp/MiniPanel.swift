@@ -40,7 +40,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         var page = Page.home
         var forwardPage: Page?
         var terminal: ShellTerminalView?
-        var web: WebContent?
+        var browser: BrowserView?
         var notes: NotesSession?
         var notesView: NSHostingView<NotesView>?
         var novel: NovelSession?
@@ -56,7 +56,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             case .notes: return notes?.document.title ?? "便签"
             case .novel: return novel?.book.map { "\($0.title) · \(number)" } ?? "小说 \(number)"
             case .stocks: return "自选股 \(number)"
-            case .web: return "网页 \(number)"
+            case .web: return browser?.pageTitle ?? "浏览器 \(number)"
             }
         }
 
@@ -74,10 +74,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             terminal?.endSession()
             terminal?.removeFromSuperview()
             terminal = nil
-            web?.onNavigationChanged = nil
-            web?.stop()
-            web?.webView.removeFromSuperview()
-            web = nil
+            browser?.dispose()
+            browser = nil
         }
     }
 
@@ -106,6 +104,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         switch selected.page {
         case .terminal: return responder === selected.terminal
         case .stocks: return responder is NSTextInputClient
+        case .web: return selected.browser?.hasEditingFocus == true
         case .novel, .notes: return (responder as? NSTextView)?.isEditable == true
         default: return false
         }
@@ -158,6 +157,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             },
             openStocks: { [weak self] in self?.showStocks() },
             openNotes: { [weak self] in self?.showNotes() },
+            openBrowser: { [weak self] in self?.showBrowser() },
             renameWindow: actions.renameWindow,
             toggleAutomaticHiding: actions.toggleAutomaticHiding,
             settings: { [weak self] sender in self?.showSettings(from: sender) },
@@ -476,6 +476,10 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         stockChart.dismiss()
         makeFirstResponder(nil)
         selected = tab
+        // Pages that are no longer on screen must not keep playing sound.
+        for other in tabs where other.browser != nil && (other !== tab || tab.page != .web) {
+            other.browser?.pauseMedia()
+        }
         watchlist.setVisible(tab.page == .stocks && currentState?.isVisible == true, owner: watchlistOwner)
         switch tab.page {
         case .notes:
@@ -543,7 +547,11 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 makeFirstResponder(view)
             }
         case .web:
-            if let web = tab.web { chrome.showWebContent(web.webView) }
+            if let view = tab.browser {
+                chrome.showReadingSurface(view)
+                makeKeyAndOrderFront(nil)
+                view.focusContent()
+            }
         case .home:
             chrome.showHome()
         }
@@ -570,6 +578,10 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             }
             if step != 0 { activate(tabs[(index + step + tabs.count) % tabs.count]); return true }
         }
+        if modifiers == [.command, .shift], selected.page == .web, key == "+" || key == "=" {
+            selected.browser?.zoomIn()
+            return true
+        }
         if modifiers == .command {
             switch key {
             case "n" where selected.page == .notes:
@@ -584,6 +596,28 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 selected.novel?.section = .search; return true
             case "d" where selected.page == .novel && selected.novel?.section == .reading:
                 selected.novel?.markHere(); return true
+            case "a" where selected.page == .web:
+                return NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: self)
+            case "c" where selected.page == .web:
+                return NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: self)
+            case "x" where selected.page == .web:
+                return NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: self)
+            case "v" where selected.page == .web:
+                return NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: self)
+            case "z" where selected.page == .web:
+                return NSApp.sendAction(Selector(("undo:")), to: nil, from: self)
+            case "l" where selected.page == .web:
+                selected.browser?.focusAddress(); return true
+            case "r" where selected.page == .web:
+                selected.browser?.reload(); return true
+            case "d" where selected.page == .web:
+                selected.browser?.toggleBookmark(); return true
+            case "=" where selected.page == .web:
+                selected.browser?.zoomIn(); return true
+            case "-" where selected.page == .web:
+                selected.browser?.zoomOut(); return true
+            case "0" where selected.page == .web:
+                selected.browser?.resetZoom(); return true
             case "t": addTab(); return true
             case "w": closeTab(number: selected.number); return true
             case "[" where selected.page != .home: goBack(); return true
@@ -595,8 +629,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     }
 
     @objc private func goBack() {
-        if selected.page == .web, let web = selected.web, web.webView.canGoBack {
-            web.webView.goBack()
+        if selected.page == .web, let browser = selected.browser, browser.canGoBack {
+            browser.goBack()
         } else {
             selected.forwardPage = selected.page
             if selected.page == .terminal, selected.terminal?.isRunning == false {
@@ -615,8 +649,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         case (.home, .novel): showNovel()
         case (.home, .notes): showNotes()
         case (.home, .stocks): showStocks()
-        case (.home, .web): showFixture()
-        case (.web, _): selected.web?.webView.goForward()
+        case (.home, .web): showBrowser()
+        case (.web, _): selected.browser?.goForward()
         default: break
         }
     }
@@ -676,19 +710,23 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         activate(selected)
     }
 
-    private func showFixture() {
+    private func showBrowser() {
+        guard canManageTabs else { return }
         let tab = selected
-        if tab.web == nil {
-            let web = WebContent()
-            tab.web = web
-            web.onNavigationChanged = { [weak self, weak tab] in
-                guard let self, self.selected === tab else { return }
-                self.updateToolbar()
+        let isNew = tab.browser == nil
+        if isNew {
+            let browser = BrowserView(frame: chrome.bounds)
+            browser.onTitleChange = { [weak self] in
+                guard let self, !self.isDisposed else { return }
+                self.refreshTabs()
             }
-            web.loadFixture()
+            tab.browser = browser
         }
         tab.page = .web
         activate(tab)
+        guard isNew, let browser = tab.browser else { return }
+        browser.showStartPage()
+        browser.focusAddress()
     }
 
     private func showTerminal() {

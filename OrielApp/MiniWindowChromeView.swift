@@ -1,5 +1,4 @@
 import AppKit
-import WebKit
 
 @MainActor
 final class MiniWindowChromeView: NSView {
@@ -12,6 +11,7 @@ final class MiniWindowChromeView: NSView {
         var dropNovel: ([URL]) -> Bool = { _ in false }
         var openStocks: () -> Void = {}
         var openNotes: () -> Void = {}
+        var openBrowser: () -> Void = {}
         var renameWindow: () -> Void = {}
         var toggleAutomaticHiding: () -> Void
         var settings: (NSView) -> Void
@@ -23,7 +23,7 @@ final class MiniWindowChromeView: NSView {
 
     private let content = ChromeContentView()
     private let home = ChromeHomeView(frame: .zero)
-    private let webHost = ChromeClippingView(frame: .zero)
+
     private let surfaceHost = NSView()
     private let tabBar: WindowTabBar
     private let dragAction: (NSEvent) -> Void
@@ -57,6 +57,7 @@ final class MiniWindowChromeView: NSView {
         home.onOpenNotes = actions.openNotes
         home.onDropNovel = actions.dropNovel
         home.onOpenStocks = actions.openStocks
+        home.onOpenBrowser = actions.openBrowser
         appearance = NSAppearance(named: .aqua)
         wantsLayer = true
         layer?.backgroundColor = ChromePalette.background.cgColor
@@ -89,7 +90,6 @@ final class MiniWindowChromeView: NSView {
 
         addSubview(content)
         content.addSubview(home)
-        content.addSubview(webHost)
         surfaceHost.wantsLayer = true
         addSubview(surfaceHost)
         tabBar.isHidden = true
@@ -131,7 +131,6 @@ final class MiniWindowChromeView: NSView {
         content.frame = NSRect(x: 6, y: contentTop, width: max(0, bounds.width - 12),
                                height: max(0, bounds.height - contentTop - 6))
         home.frame = content.bounds
-        webHost.frame = content.bounds.insetBy(dx: 1, dy: 1)
         surfaceHost.frame = NSRect(x: 0, y: contentTop, width: bounds.width,
                                     height: max(0, bounds.height - contentTop))
         content.needsDisplay = true
@@ -169,7 +168,6 @@ final class MiniWindowChromeView: NSView {
         surfaceHost.isHidden = true
         content.isHidden = false
         home.isHidden = false
-        webHost.isHidden = true
     }
 
     func setWindowName(_ name: String) {
@@ -183,16 +181,6 @@ final class MiniWindowChromeView: NSView {
         tabBar.isHidden = !hasMultipleTabs
         tabBar.setTabs(tabs, selected: selected)
         needsLayout = true
-    }
-
-    func showWebContent(_ webView: WKWebView) {
-        if webView.superview !== webHost { webHost.subviews = [webView] }
-        webView.frame = webHost.bounds
-        webView.autoresizingMask = [.width, .height]
-        surfaceHost.isHidden = true
-        content.isHidden = false
-        home.isHidden = true
-        webHost.isHidden = false
     }
 
     func showTerminal(_ terminal: NSView) {
@@ -502,7 +490,7 @@ private final class ChromeTooltipView: NSView {
 }
 
 @MainActor
-private enum ChromePalette {
+enum ChromePalette {
     static let background = NSColor(srgbRed: 254 / 255, green: 254 / 255, blue: 254 / 255, alpha: 1)
     static let ink = NSColor(srgbRed: 54 / 255, green: 54 / 255, blue: 54 / 255, alpha: 1)
     static let secondary = NSColor(srgbRed: 154 / 255, green: 154 / 255, blue: 154 / 255, alpha: 1)
@@ -518,33 +506,24 @@ private final class ChromeContentView: NSView {
 }
 
 @MainActor
-private final class ChromeClippingView: NSView {
-    override var isFlipped: Bool { true }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.cornerRadius = 7
-        layer?.masksToBounds = true
-    }
-
-    required init?(coder: NSCoder) { nil }
-}
-
-@MainActor
 private final class ChromeHomeView: NSView {
     var onOpenTerminal: (() -> Void)?
     var onOpenNovel: (() -> Void)?
     var onOpenNotes: (() -> Void)?
     var onDropNovel: (([URL]) -> Bool)?
     var onOpenStocks: (() -> Void)?
+    var onOpenBrowser: (() -> Void)?
     private let stockButton = HomeTileButton(title: "自选股", target: nil, action: nil)
     private let terminalButton = HomeTileButton(title: "终端", target: nil, action: nil)
     private let heading: NSTextField
     private let subtitle: NSTextField
     private let novelButton = HomeTileButton(title: "小说", target: nil, action: nil)
     private let notesButton = HomeTileButton(title: "便签", target: nil, action: nil)
+    private let browserButton = HomeTileButton(title: "浏览器", target: nil, action: nil)
     private var backgroundOpacity: CGFloat = 1
+
+    private static let tileWidth: CGFloat = 44
+    private static let tileStep: CGFloat = 48
 
     override var isFlipped: Bool { true }
     private var isCompact: Bool { bounds.width < 240 || bounds.height < 264 }
@@ -595,6 +574,13 @@ private final class ChromeHomeView: NSView {
         notesButton.target = self
         notesButton.action = #selector(openNotes)
         addSubview(notesButton)
+        browserButton.isBordered = false
+        browserButton.font = terminalButton.font
+        browserButton.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+        browserButton.setAccessibilityLabel("浏览器")
+        browserButton.target = self
+        browserButton.action = #selector(openBrowser)
+        addSubview(browserButton)
         registerForDraggedTypes([.fileURL])
         setActionsEnabled(true)
     }
@@ -623,7 +609,7 @@ private final class ChromeHomeView: NSView {
     }
 
     func setActionsEnabled(_ enabled: Bool) {
-        for button in [terminalButton, novelButton, stockButton, notesButton] {
+        for button in [terminalButton, novelButton, stockButton, notesButton, browserButton] {
             button.isEnabled = enabled
             button.toolTip = enabled ? "打开" + button.title : nil
         }
@@ -633,6 +619,7 @@ private final class ChromeHomeView: NSView {
 
     @objc private func openNovel() { onOpenNovel?() }
     @objc private func openNotes() { onOpenNotes?() }
+    @objc private func openBrowser() { onOpenBrowser?() }
     @objc private func openStocks() { onOpenStocks?() }
     @objc private func openTerminal() { onOpenTerminal?() }
 
@@ -653,13 +640,16 @@ private final class ChromeHomeView: NSView {
         super.layout()
         for label in [heading, subtitle] { label.isHidden = isCompact }
         let origin = NSPoint(x: (bounds.width - 240) / 2, y: (bounds.height - 240) / 2)
-        let compactSide = min(40, bounds.height, max(0, bounds.width - 6) / 4)
-        for (index, button) in [terminalButton, novelButton, stockButton, notesButton].enumerated() {
+        let tiles = [terminalButton, novelButton, stockButton, notesButton, browserButton]
+        let count = CGFloat(tiles.count)
+        let compactSide = min(40, bounds.height, max(0, bounds.width - 6) / count)
+        for (index, button) in tiles.enumerated() {
             button.imagePosition = isCompact ? .imageOnly : .imageAbove
             button.frame = isCompact
-                ? NSRect(x: bounds.midX - (4 * compactSide + 6) / 2 + CGFloat(index) * (compactSide + 2),
+                ? NSRect(x: bounds.midX - (count * compactSide + 2 * (count - 1)) / 2 + CGFloat(index) * (compactSide + 2),
                          y: bounds.midY - compactSide / 2, width: compactSide, height: compactSide)
-                : NSRect(x: CGFloat(index) * 60 + origin.x, y: 182 + origin.y, width: 56, height: 56)
+                : NSRect(x: CGFloat(index) * Self.tileStep + origin.x, y: 182 + origin.y,
+                         width: Self.tileWidth, height: 56)
         }
         heading.frame = NSRect(x: origin.x, y: 80 + origin.y, width: 240, height: 48)
         subtitle.frame = NSRect(x: 66 + origin.x, y: 144 + origin.y, width: 108, height: 20)
@@ -684,10 +674,9 @@ private final class ChromeHomeView: NSView {
         divider.line(to: NSPoint(x: 224, y: 154))
         divider.stroke()
 
-        for index in 0..<4 {
-            let center = CGFloat(28 + index * 60)
+        for index in 0..<5 {
             NSColor.white.withAlphaComponent(backgroundOpacity).setFill()
-            NSBezierPath(roundedRect: NSRect(x: center - 28, y: 182, width: 56, height: 56),
+            NSBezierPath(roundedRect: NSRect(x: CGFloat(index) * Self.tileStep, y: 182, width: Self.tileWidth, height: 56),
                          xRadius: 4, yRadius: 4).fill()
         }
     }
