@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Combine
 import OrielCore
+import OrielReading
 import OrielTerminal
 
 @MainActor
@@ -33,12 +34,13 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private let watchlistOwner = UUID().uuidString
     private let stockChart = StockChartHover()
     private var currentState: WindowSnapshot?
-    private enum Page { case home, web, terminal, stocks, novel, notes }
     @MainActor
     private final class Tab {
         let number: Int
-        var page = Page.home
-        var forwardPage: Page?
+        /// nil means the new-tab (home) page.
+        var page: PageKind?
+        /// The page `goBack` came from, still offered by `goForward`.
+        var forwardPage: PageKind?
         var terminal: ShellTerminalView?
         var browser: BrowserView?
         var notes: NotesSession?
@@ -51,12 +53,12 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
 
         var title: String {
             switch page {
-            case .home: return "首页 \(number)"
-            case .terminal: return "终端 \(number)"
-            case .notes: return notes?.document.title ?? "便签"
-            case .novel: return novel?.book.map { "\($0.title) · \(number)" } ?? "小说 \(number)"
-            case .stocks: return "自选股 \(number)"
-            case .web: return browser?.pageTitle ?? "浏览器 \(number)"
+            case nil: return "首页"
+            case .terminal?: return terminal?.workingDirectoryName ?? "终端"
+            case .notes?: return notes?.document.title ?? "便签"
+            case .novel?: return novel?.book?.title ?? "小说"
+            case .stocks?: return "自选股"
+            case .browser?: return browser?.pageTitle ?? "浏览器"
             }
         }
 
@@ -89,7 +91,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private var dragCompletionTimer: Timer?
     fileprivate weak var hoveredResizeHandle: PanelResizeHandle?
     private var lockRecoveryPanel: LockRecoveryPanel?
-    private let settingsPanel = TransparencySettingsPanel()
+    private let settingsPanel = WindowSettingsPanel()
     private var backgroundOpacity: Double = 0.75
     private var emphasis: WindowGroupController.Emphasis = .normal
     private var contentOpacity: Double = 0.75
@@ -102,11 +104,11 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     var hasEditingFocus: Bool {
         guard isKeyWindow, let responder = firstResponder else { return false }
         switch selected.page {
-        case .terminal: return responder === selected.terminal
-        case .stocks: return responder is NSTextInputClient
-        case .web: return selected.browser?.hasEditingFocus == true
-        case .novel, .notes: return (responder as? NSTextView)?.isEditable == true
-        default: return false
+        case .terminal?: return responder === selected.terminal
+        case .stocks?: return responder is NSTextInputClient
+        case .browser?: return selected.browser?.hasEditingFocus == true
+        case .novel?, .notes?: return (responder as? NSTextView)?.isEditable == true
+        case nil: return false
         }
     }
 
@@ -146,8 +148,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             addTab: { [weak self] in self?.addTab() },
             selectTab: { [weak self] in self?.selectTab(number: $0) },
             closeTab: { [weak self] in self?.closeTab(number: $0) },
-            openTerminal: { [weak self] in self?.showTerminal() },
-            openNovel: { [weak self] in self?.showNovel() },
+            openPage: { [weak self] kind in self?.openPage(kind) },
             dropNovel: { [weak self] urls in
                 guard let self, canManageTabs else { return false }
                 showNovel()
@@ -155,12 +156,9 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 selected.novel?.openFiles(urls)
                 return true
             },
-            openStocks: { [weak self] in self?.showStocks() },
-            openNotes: { [weak self] in self?.showNotes() },
-            openBrowser: { [weak self] in self?.showBrowser() },
             renameWindow: actions.renameWindow,
+            windowSettings: { [weak self] sender in self?.showSettings(from: sender) },
             toggleAutomaticHiding: actions.toggleAutomaticHiding,
-            settings: { [weak self] sender in self?.showSettings(from: sender) },
             toggleLock: actions.toggleLock,
             hide: actions.hide,
             close: actions.close,
@@ -174,6 +172,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         shadowView.installResizeHandles()
         applyTransparency()
         refreshTabs()
+        showHome()
         delegate = self
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(menuBegan(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
@@ -400,7 +399,13 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private func refreshTabs() {
         guard !isDisposed else { return }
         if !tabs.contains(where: { $0.notes != nil }) { noteChanges = nil }
-        chrome.setTabs(tabs.map { ($0.number, $0.title) }, selected: selected.number)
+        chrome.setTabs(tabs.map { ChromeTab(number: $0.number, title: $0.title, kind: $0.page) },
+                       selected: selected.number)
+    }
+
+    /// Every return to the launcher shows the page tiles.
+    private func showHome() {
+        chrome.showHome()
     }
 
     private func observeNoteTitles() {
@@ -477,12 +482,12 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         makeFirstResponder(nil)
         selected = tab
         // Pages that are no longer on screen must not keep playing sound.
-        for other in tabs where other.browser != nil && (other !== tab || tab.page != .web) {
+        for other in tabs where other.browser != nil && (other !== tab || tab.page != .browser) {
             other.browser?.pauseMedia()
         }
         watchlist.setVisible(tab.page == .stocks && currentState?.isVisible == true, owner: watchlistOwner)
         switch tab.page {
-        case .notes:
+        case .notes?:
             if tab.notesView == nil {
                 let workspace = NotesWorkspace.shared
                 let recent = workspace.list().max(by: { $0.record.updated < $1.record.updated })
@@ -506,7 +511,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 chrome.showReadingSurface(view)
                 makeKeyAndOrderFront(nil)
             }
-        case .novel:
+        case .novel?:
             if tab.novelView == nil {
                 let library = novelLibrary
                 let session = NovelSession(library: library)
@@ -524,7 +529,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 chrome.showReadingSurface(view)
                 makeKeyAndOrderFront(nil)
             }
-        case .stocks:
+        case .stocks?:
             if tab.stocksView == nil {
                 let view = NSHostingView(rootView: StocksView(list: watchlist) { [weak self, weak tab] symbol, inside in
                     guard let self, selected === tab, selected.page == .stocks else { return }
@@ -540,20 +545,22 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 chrome.showReadingSurface(view)
                 makeKeyAndOrderFront(nil)
             }
-        case .terminal:
+        case .terminal?:
             if let view = tab.terminal {
+                view.nativeBackgroundColor = OrielPalette.terminal
+                view.nativeForegroundColor = OrielPalette.terminalInk
                 chrome.showTerminal(view)
                 makeKeyAndOrderFront(nil)
                 makeFirstResponder(view)
             }
-        case .web:
+        case .browser?:
             if let view = tab.browser {
                 chrome.showReadingSurface(view)
                 makeKeyAndOrderFront(nil)
                 view.focusContent()
             }
-        case .home:
-            chrome.showHome()
+        case nil:
+            showHome()
         }
         refreshTabs()
         updateToolbar()
@@ -578,7 +585,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             }
             if step != 0 { activate(tabs[(index + step + tabs.count) % tabs.count]); return true }
         }
-        if modifiers == [.command, .shift], selected.page == .web, key == "+" || key == "=" {
+        if modifiers == [.command, .shift], selected.page == .browser, key == "+" || key == "=" {
             selected.browser?.zoomIn()
             return true
         }
@@ -596,32 +603,32 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 selected.novel?.section = .search; return true
             case "d" where selected.page == .novel && selected.novel?.section == .reading:
                 selected.novel?.markHere(); return true
-            case "a" where selected.page == .web:
+            case "a" where selected.page == .browser:
                 return NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: self)
-            case "c" where selected.page == .web:
+            case "c" where selected.page == .browser:
                 return NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: self)
-            case "x" where selected.page == .web:
+            case "x" where selected.page == .browser:
                 return NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: self)
-            case "v" where selected.page == .web:
+            case "v" where selected.page == .browser:
                 return NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: self)
-            case "z" where selected.page == .web:
+            case "z" where selected.page == .browser:
                 return NSApp.sendAction(Selector(("undo:")), to: nil, from: self)
-            case "l" where selected.page == .web:
+            case "l" where selected.page == .browser:
                 selected.browser?.focusAddress(); return true
-            case "r" where selected.page == .web:
+            case "r" where selected.page == .browser:
                 selected.browser?.reload(); return true
-            case "d" where selected.page == .web:
+            case "d" where selected.page == .browser:
                 selected.browser?.toggleBookmark(); return true
-            case "=" where selected.page == .web:
+            case "=" where selected.page == .browser:
                 selected.browser?.zoomIn(); return true
-            case "-" where selected.page == .web:
+            case "-" where selected.page == .browser:
                 selected.browser?.zoomOut(); return true
-            case "0" where selected.page == .web:
+            case "0" where selected.page == .browser:
                 selected.browser?.resetZoom(); return true
             case "t": addTab(); return true
             case "w": closeTab(number: selected.number); return true
-            case "[" where selected.page != .home: goBack(); return true
-            case "]" where selected.forwardPage != nil || selected.page == .web: goForward(); return true
+            case "[" where selected.page != nil: goBack(); return true
+            case "]" where selected.forwardPage != nil || selected.page == .browser: goForward(); return true
             default: break
             }
         }
@@ -629,7 +636,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     }
 
     @objc private func goBack() {
-        if selected.page == .web, let browser = selected.browser, browser.canGoBack {
+        if selected.page == .browser, let browser = selected.browser, browser.canGoBack {
             browser.goBack()
         } else {
             selected.forwardPage = selected.page
@@ -638,20 +645,23 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 selected.terminal = nil
                 selected.forwardPage = nil
             }
-            selected.page = .home
+            selected.page = nil
             activate(selected)
         }
     }
 
     @objc private func goForward() {
-        switch (selected.page, selected.forwardPage) {
-        case (.home, .terminal): showTerminal()
-        case (.home, .novel): showNovel()
-        case (.home, .notes): showNotes()
-        case (.home, .stocks): showStocks()
-        case (.home, .web): showBrowser()
-        case (.web, _): selected.browser?.goForward()
-        default: break
+        if selected.page == .browser {
+            selected.browser?.goForward()
+            return
+        }
+        guard selected.page == nil, let target = selected.forwardPage else { return }
+        switch target {
+        case .terminal: showTerminal()
+        case .novel: showNovel()
+        case .notes: showNotes()
+        case .stocks: showStocks()
+        case .browser: showBrowser()
         }
     }
 
@@ -677,6 +687,17 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             selected.page = .notes
             activate(selected)
             openNote(document, in: selected)
+        }
+    }
+
+    private func openPage(_ kind: PageKind) {
+        guard canManageTabs else { return }
+        switch kind {
+        case .terminal: showTerminal()
+        case .novel: showNovel()
+        case .stocks: showStocks()
+        case .notes: showNotes()
+        case .browser: showBrowser()
         }
     }
 
@@ -722,7 +743,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             }
             tab.browser = browser
         }
-        tab.page = .web
+        tab.page = .browser
         activate(tab)
         guard isNew, let browser = tab.browser else { return }
         browser.showStartPage()
@@ -738,16 +759,22 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         tab.page = .terminal
         activate(tab)
         guard needsShell else { return }
+        // The tab title follows the shell's cwd; ignore reports from a replaced view.
+        view.onTitleChange = { [weak self, weak tab, weak view] in
+            guard let self, !self.isDisposed, let tab, let view,
+                  tab.terminal === view, tab.page == .terminal else { return }
+            self.refreshTabs()
+        }
         view.onExit = { [weak self, weak tab, weak view] in
             guard let self, !self.isDisposed, let tab, let view, tab.terminal === view else { return }
             view.removeFromSuperview()
             tab.terminal = nil
             if tab.forwardPage == .terminal { tab.forwardPage = nil }
             if tab.page == .terminal {
-                tab.page = .home
+                tab.page = nil
                 if self.selected === tab {
                     self.makeFirstResponder(nil)
-                    self.chrome.showHome()
+                    self.showHome()
                 }
             }
             if self.selected === tab { self.updateToolbar() }
@@ -784,9 +811,10 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             revealingToolbar = false
             applyTransparency()
         }
-        if !settingsPanel.isVisible { showSettings(from: chrome.settingsButton) }
+        if !settingsPanel.isVisible { showSettings(from: chrome.windowButton) }
     }
 
+    /// The slider button opens the two opacity sliders directly, with no menu in between.
     private func showSettings(from sender: NSView) {
         guard !isDisposed, currentState?.isLocked != true else { return }
         if settingsPanel.isVisible {
@@ -794,15 +822,17 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             return
         }
         chrome.dismissTooltip()
-        settingsPanel.contentViewController = TransparencySettingsController(
-            background: backgroundOpacity, content: contentOpacity
-        ) { [weak self] background, content in
-            guard let self, !self.isDisposed else { return }
-            self.backgroundOpacity = background
-            self.contentOpacity = content
-            self.applyTransparency()
-            self.actions.transparencyRecoveryChanged(max(background, content) <= 0.05)
-        }
+        settingsPanel.contentViewController = WindowSettingsController(
+            background: backgroundOpacity,
+            content: contentOpacity,
+            changed: { [weak self] background, content in
+                guard let self, !self.isDisposed else { return }
+                self.backgroundOpacity = background
+                self.contentOpacity = content
+                self.applyTransparency()
+                self.actions.transparencyRecoveryChanged(max(background, content) <= 0.05)
+            }
+        )
         settingsPanel.show(below: sender)
     }
 
@@ -994,7 +1024,7 @@ private final class PanelShadowView: NSView {
         if highlighted {
             let ring = NSBezierPath(roundedRect: bodyRect.insetBy(dx: -1, dy: -1), xRadius: 9, yRadius: 9)
             ring.lineWidth = 2
-            NSColor(srgbRed: 0.19, green: 0.55, blue: 0.45, alpha: 1).setStroke()
+            OrielPalette.accent.setStroke()
             ring.stroke()
         }
     }
@@ -1032,7 +1062,7 @@ private final class LockRecoveryPanel: NSPanel {
 
 /// A small anchored panel gives the compact settings a controlled corner radius.
 @MainActor
-private final class TransparencySettingsPanel: NSPanel {
+private final class WindowSettingsPanel: NSPanel {
     var onDismiss: (() -> Void)?
     private var localMonitor: Any?
     private var globalMonitor: Any?
@@ -1059,7 +1089,7 @@ private final class TransparencySettingsPanel: NSPanel {
     func show(below anchor: NSView) {
         guard let owner = anchor.window, let content = contentViewController?.view else { return }
         content.wantsLayer = true
-        content.layer?.backgroundColor = NSColor(calibratedWhite: 0.99, alpha: 1).cgColor
+        content.layer?.backgroundColor = OrielPalette.surface.cgColor
         content.layer?.cornerRadius = 8
         content.layer?.masksToBounds = true
         let anchorFrame = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
@@ -1122,15 +1152,15 @@ private final class OpacitySliderCell: NSSliderCell {
         let knob = knobRect(flipped: flipped)
         let track = rect.insetBy(dx: knob.width / 2, dy: 0)
         let thumbX = min(max(knob.midX, track.minX), track.maxX)
-        let blue = NSColor.systemBlue
-        let gray = NSColor(white: 0.8, alpha: 1)
+        let accent = OrielPalette.accent
+        let gray = OrielPalette.border
         gray.setFill()
         NSRect(x: track.minX, y: y - 1.5, width: track.width, height: 3).fill()
-        blue.setFill()
+        accent.setFill()
         NSRect(x: track.minX, y: y - 1.5, width: thumbX - track.minX, height: 3).fill()
         for tick in 0...4 {
             let x = track.minX + CGFloat(tick) * track.width / 4
-            (x <= thumbX ? blue : gray).setFill()
+            (x <= thumbX ? accent : gray).setFill()
             NSRect(x: x - 0.5, y: y - 3, width: 1, height: 6).fill()
         }
     }
@@ -1147,14 +1177,14 @@ private final class OpacitySliderCell: NSSliderCell {
         NSColor.white.setFill()
         path.fill()
         NSGraphicsContext.restoreGraphicsState()
-        NSColor(white: 0.85, alpha: 1).setStroke()
+        OrielPalette.border.setStroke()
         path.lineWidth = 0.5
         path.stroke()
     }
 }
 
 @MainActor
-private final class TransparencySettingsController: NSViewController {
+private final class WindowSettingsController: NSViewController {
     private let backgroundSlider: NSSlider
     private let contentSlider: NSSlider
     private let changed: (Double, Double) -> Void
@@ -1188,6 +1218,7 @@ private final class TransparencySettingsController: NSViewController {
         for (title, slider, y) in rows {
             let label = NSTextField(labelWithString: title)
             label.font = .systemFont(ofSize: 12, weight: .medium)
+            label.textColor = OrielPalette.ink
             label.frame = NSRect(x: 12, y: y, width: 66, height: 17)
             slider.frame = NSRect(x: 83, y: y - 3, width: 132, height: 23)
             slider.isContinuous = true

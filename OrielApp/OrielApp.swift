@@ -21,7 +21,9 @@ struct OrielApp: App {
             Button("退出 Oriel") { model.quit() }
                 .keyboardShortcut("q")
         } label: {
-            Text("Oriel")
+            Image(nsImage: Self.menuBarIcon)
+                .accessibilityLabel("Oriel")
+                .help("Oriel · 半窗")
         }
         .menuBarExtraStyle(.menu)
         .commands {
@@ -33,6 +35,15 @@ struct OrielApp: App {
             }
         }
     }
+
+    private static let menuBarIcon: NSImage = {
+        let image = Bundle.main.url(forResource: "OrielMenuTemplate", withExtension: "pdf", subdirectory: "Brand")
+            .flatMap { NSImage(contentsOf: $0) }
+            ?? NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Oriel")!
+        image.size = NSSize(width: 18, height: 18)
+        image.isTemplate = true
+        return image
+    }()
 }
 
 private struct WindowActions: View {

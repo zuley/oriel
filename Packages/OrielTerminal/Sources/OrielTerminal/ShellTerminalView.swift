@@ -5,12 +5,62 @@ import SwiftTerm
 @MainActor
 public final class ShellTerminalView: LocalProcessTerminalView {
     public var onExit: (() -> Void)?
+    /// Called when the shell reports a new working directory, so a tab can show where it is.
+    public var onTitleChange: (() -> Void)?
     public private(set) var isRunning = false
+    /// Last path component of the shell's current directory ("~" for home); nil until the first prompt.
+    public private(set) var workingDirectoryName: String?
     private var isClosing = false
     private var closingForeground: pid_t = -1
     private static var pendingShutdowns: [ObjectIdentifier: ShellTerminalView] = [:]
 
     public override var needsPanelToBecomeKey: Bool { true }
+
+    // SwiftTerm keeps its process delegate weakly, so the observer is owned here.
+    private let directoryObserver = DirectoryObserver()
+
+    public override init(frame: NSRect) {
+        super.init(frame: frame)
+        installDirectoryObserver()
+    }
+
+    public required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        installDirectoryObserver()
+    }
+
+    private func installDirectoryObserver() {
+        directoryObserver.onDirectory = { [weak self] directory in
+            guard let self else { return }
+            let name = Self.directoryName(from: directory)
+            guard name != self.workingDirectoryName else { return }
+            self.workingDirectoryName = name
+            self.onTitleChange?()
+        }
+        processDelegate = directoryObserver
+    }
+
+    /// True while something other than the idle shell owns the terminal (a build, an editor, ssh...).
+    public var hasForegroundJob: Bool {
+        guard isRunning, !isClosing, process.shellPid > 0 else { return false }
+        let foreground = tcgetpgrp(process.childfd)
+        return foreground > 0 && foreground != process.shellPid
+    }
+
+    /// Accepts the `file://host/path` form of OSC 7 as well as a bare path.
+    static func directoryName(from reported: String?) -> String? {
+        guard var path = reported, !path.isEmpty else { return nil }
+        if path.hasPrefix("file://") {
+            path = String(path.dropFirst(7))
+            if let slash = path.firstIndex(of: "/") { path = String(path[slash...]) }
+            path = path.removingPercentEncoding ?? path
+        }
+        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
+        if path == "/" { return "/" }
+        if path == FileManager.default.homeDirectoryForCurrentUser.path { return "~" }
+        let name = (path as NSString).lastPathComponent
+        return name.isEmpty ? nil : name
+    }
 
     public func launchShell() -> Bool {
         let accountShell = getpwuid(getuid()).flatMap { $0.pointee.pw_shell }.map { String(cString: $0) }
@@ -91,5 +141,19 @@ public final class ShellTerminalView: LocalProcessTerminalView {
         isRunning = false
         super.processTerminated(source, exitCode: exitCode)
         onExit?()
+    }
+}
+
+/// Receives the shell's OSC 7 "current directory" reports from SwiftTerm.
+@MainActor
+private final class DirectoryObserver: @preconcurrency LocalProcessTerminalViewDelegate {
+    var onDirectory: (@MainActor (String?) -> Void)?
+
+    func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
+    func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
+    func processTerminated(source: TerminalView, exitCode: Int32?) {}
+
+    func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
+        onDirectory?(directory)
     }
 }

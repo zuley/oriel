@@ -1,0 +1,54 @@
+{
+  "scope": "Opaque neutral UI tokens only; arbitrary user transparency composites and existing market colors are not certified.",
+  "pairs": [
+    {
+      "foreground": "ink",
+      "background": "background",
+      "ratio": 11.98,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "secondary",
+      "background": "background",
+      "ratio": 4.98,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "secondary",
+      "background": "sidebar",
+      "ratio": 4.61,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "accent",
+      "background": "selection",
+      "ratio": 5.01,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "white",
+      "background": "accent",
+      "ratio": 5.76,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "border",
+      "background": "surface",
+      "ratio": 3.03,
+      "minimum": 3,
+      "passes": true
+    },
+    {
+      "foreground": "terminalInk",
+      "background": "terminal",
+      "ratio": 16.83,
+      "minimum": 4.5,
+      "passes": true
+    }
+  ]
+}

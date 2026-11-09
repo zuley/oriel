@@ -154,7 +154,7 @@ struct StockChartView: View {
                     Button { chart.load(period) } label: {
                         Text(period.rawValue).font(.system(size: 10, weight: .medium))
                             .padding(.horizontal, 7).frame(height: 18)
-                            .background(chart.period == period ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 4))
+                            .background(chart.period == period ? Color(nsColor: OrielPalette.selection) : .clear, in: RoundedRectangle(cornerRadius: 4))
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(chart.period == period ? .isSelected : [])
@@ -173,8 +173,10 @@ struct StockChartView: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(7)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8))
-        .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.quaternary) }
+        .foregroundStyle(OrielPalette.text)
+        .tint(OrielPalette.tint)
+        .background(Color(nsColor: OrielPalette.surface), in: RoundedRectangle(cornerRadius: 8))
+        .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: OrielPalette.divider)) }
         .onHover { chart.popupHover($0) }
     }
 
@@ -199,8 +201,8 @@ struct StockChartView: View {
                 last = CGPoint(x: 1 + x * (size.width - 2), y: y(p.price))
                 if i == 0 { line.move(to: last) } else { line.addLine(to: last) }
             }
-            context.stroke(line, with: .color(.accentColor), lineWidth: 1.2)
-            if points.count == 1 { context.fill(Path(ellipseIn: CGRect(x: last.x-1, y: last.y-1, width: 2, height: 2)), with: .color(.accentColor)) }
+            context.stroke(line, with: .color(OrielPalette.tint), lineWidth: 1.2)
+            if points.count == 1 { context.fill(Path(ellipseIn: CGRect(x: last.x-1, y: last.y-1, width: 2, height: 2)), with: .color(OrielPalette.tint)) }
         }.accessibilityLabel(symbol.name + "分时走势")
     }
 

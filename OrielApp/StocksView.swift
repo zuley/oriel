@@ -46,6 +46,9 @@ struct StocksView: View {
                 fullList
             }
         }
+        .foregroundStyle(OrielPalette.text)
+        .tint(OrielPalette.tint)
+        .accentColor(OrielPalette.tint)
     }
 
     private var compactQuote: some View {
@@ -78,7 +81,7 @@ struct StocksView: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 HStack(spacing: 5) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    Image(systemName: "magnifyingglass").foregroundStyle(OrielPalette.mutedText)
                     TextField("代码 / 名称 / 拼音", text: $query).textFieldStyle(.plain)
                         .accessibilityLabel("搜索股票")
                     if !query.isEmpty {
@@ -86,12 +89,12 @@ struct StocksView: View {
                             .accessibilityLabel("清除搜索")
                     }
                 }
-                .padding(.horizontal, 7).frame(height: 25).background(Color.gray.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+                .padding(.horizontal, 7).frame(height: 25).background(Color(nsColor: OrielPalette.field), in: RoundedRectangle(cornerRadius: 5))
                 Button {
                     if term.isEmpty { list.refresh() } else { searchAttempt += 1 }
                 } label: {
                     Image(systemName: "arrow.clockwise").frame(width: 24, height: 25)
-                        .background(Color.gray.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+                        .background(Color(nsColor: OrielPalette.field), in: RoundedRectangle(cornerRadius: 5))
                 }
                 .disabled(term.isEmpty && list.loading)
                 .help(term.isEmpty ? "刷新行情" : "重新搜索")
@@ -119,7 +122,7 @@ struct StocksView: View {
                                                 .font(.system(size: 7))
                                         }
                                     }
-                                    .foregroundStyle(sort == col ? Color.primary : Color.secondary)
+                                    .foregroundStyle(sort == col ? OrielPalette.text : OrielPalette.mutedText)
                                     .frame(width: col == .percent ? 58 : 52, alignment: .trailing)
                                 }
                             }
@@ -135,14 +138,14 @@ struct StocksView: View {
                                                 }
                                             }
                                     }
-                                    if sorted.isEmpty { Text("搜索股票以加入自选").foregroundStyle(.secondary).padding(.vertical) }
+                                    if sorted.isEmpty { Text("搜索股票以加入自选").foregroundStyle(OrielPalette.mutedText).padding(.vertical) }
                                 }
                             }
                             HStack {
                                 Text("腾讯财经").fontWeight(.medium)
                                 Spacer()
                                 Text(list.loading ? "更新中…" : list.status)
-                            }.font(.system(size: 9)).foregroundStyle(.secondary).padding(.horizontal, 7).frame(height: 20)
+                            }.font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText).padding(.horizontal, 7).frame(height: 20)
                             Divider()
                             quoteRow(.index, index: true).help(list.quotes[StockSymbol.index.id]?.asOf ?? "上证指数").background(Color.gray.opacity(0.06))
                         }
@@ -159,8 +162,8 @@ struct StocksView: View {
                             } label: {
                                 HStack(spacing: 5) {
                                     badge(symbol)
-                                    Text(symbol.name).foregroundStyle(Color.primary).lineLimit(1)
-                                    Text(symbol.code).foregroundStyle(.secondary).font(.caption2)
+                                    Text(symbol.name).foregroundStyle(OrielPalette.text).lineLimit(1)
+                                    Text(symbol.code).foregroundStyle(OrielPalette.mutedText).font(.caption2)
                                     Spacer()
                                     Image(systemName: added ? "checkmark.circle.fill" : "plus.circle").foregroundStyle(Color.accentColor)
                                 }.padding(.horizontal, 7).frame(height: 28).contentShape(Rectangle())
@@ -169,7 +172,7 @@ struct StocksView: View {
                             .background(StockRowHoverArea { onStockHover(symbol, $0) })
                             .onDisappear { onStockHover(symbol, false) }
                         }
-                        if matches.isEmpty { Text(searchStatus).foregroundStyle(.secondary).padding(.top, 10) }
+                        if matches.isEmpty { Text(searchStatus).foregroundStyle(OrielPalette.mutedText).padding(.top, 10) }
                     }
                 }
             }
@@ -211,7 +214,7 @@ struct StocksView: View {
                             .accessibilityLabel("移除" + symbol.name)
                     } else { badge(symbol) }
                 }
-                Text(symbol.name).foregroundStyle(Color.primary).lineLimit(1)
+                Text(symbol.name).foregroundStyle(OrielPalette.text).lineLimit(1)
             }.frame(maxWidth: .infinity, alignment: .leading)
             Text(quote?.price ?? "—").frame(width: 52, alignment: .trailing)
             Text(signed(quote?.change)).frame(width: 52, alignment: .trailing)

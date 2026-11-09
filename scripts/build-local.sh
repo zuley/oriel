@@ -23,6 +23,7 @@ if [[ ${#core_sources[@]} -eq 0 ]]; then
 fi
 
 app_sources=(
+  "$project_root/OrielApp/OrielPalette.swift"
   "$project_root/OrielApp/MiniWindowSession.swift"
   "$project_root/OrielApp/DataExport.swift"
   "$project_root/OrielApp/ManagementSettingsView.swift"
@@ -42,6 +43,10 @@ app_sources=(
   "$project_root/OrielApp/NotesStore.swift"
   "$project_root/OrielApp/NotesWorkspace.swift"
   "$project_root/OrielApp/NotesView.swift"
+  "$project_root/OrielApp/PageKind.swift"
+  "$project_root/OrielApp/ChromeLayout.swift"
+  "$project_root/OrielApp/ChromeHomeView.swift"
+  "$project_root/OrielApp/WindowTabStrip.swift"
   "$project_root/OrielApp/MiniWindowChromeView.swift"
 )
 
@@ -95,6 +100,7 @@ if [[ -d "$reading_bin/ZIPFoundation_ZIPFoundation.bundle" ]]; then
 fi
 /usr/bin/install -m 644 "$project_root/OrielApp/Resources/ZIPFoundation-LICENSE.txt" "$app_bundle/Contents/Resources/ZIPFoundation-LICENSE.txt"
 cp -R "$project_root/OrielApp/Resources/OrielZsh" "$app_bundle/Contents/Resources/"
+/usr/bin/ditto "$project_root/OrielApp/Resources/Brand" "$app_bundle/Contents/Resources/Brand"
 printf 'APPL????' > "$app_bundle/Contents/PkgInfo"
 /usr/bin/codesign --force --sign - "$app_bundle"
 /usr/bin/codesign --verify --strict "$app_bundle"

@@ -229,13 +229,16 @@ enum BrowserPages {
         <!doctype html><html><head><meta charset="utf-8"><title>\(escape(title))</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-        :root { color-scheme: light; }
-        body { margin: 0; padding: 12px; font: 13px -apple-system, "PingFang SC", sans-serif; color: #363636; background: #fff; }
+        \(OrielPalette.browserCSS)
+        body { margin: 0; padding: 12px; font: 13px -apple-system, "PingFang SC", sans-serif; color: var(--oriel-ink); background: var(--oriel-canvas); }
         h1 { margin: 4px 0 10px; font-size: 14px; font-weight: 600; }
-        p { margin: 0 0 12px; color: #9a9a9a; word-break: break-word; }
+        p { margin: 0 0 12px; color: var(--oriel-muted); word-break: break-word; }
         a { display: flex; align-items: center; gap: 8px; padding: 7px 8px; margin-bottom: 4px;
-            border-radius: 6px; color: inherit; text-decoration: none; background: #f4f4f4; }
-        a b { flex: none; width: 22px; height: 22px; border-radius: 5px; background: #e4e4e4;
+            border-radius: 6px; color: inherit; text-decoration: none; background: var(--oriel-field); }
+        a:hover, a:active { background: var(--oriel-selection); }
+        a:focus-visible { outline: 2px solid var(--oriel-accent); outline-offset: 2px; }
+        ::selection { background: var(--oriel-highlight); color: var(--oriel-ink); }
+        a b { flex: none; width: 22px; height: 22px; border-radius: 5px; background: var(--oriel-selection); color: var(--oriel-accent);
               text-align: center; line-height: 22px; font-size: 12px; }
         a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         a.retry { justify-content: center; }

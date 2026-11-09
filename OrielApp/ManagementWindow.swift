@@ -27,6 +27,7 @@ final class ManagementWindow: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         self.model = model
         window.title = "Oriel"
+        window.backgroundColor = OrielPalette.sidebar
         window.contentMinSize = NSSize(width: 720, height: 500)
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .aqua)

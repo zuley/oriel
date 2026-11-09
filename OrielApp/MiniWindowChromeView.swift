@@ -1,20 +1,24 @@
 import AppKit
 
+/// What the tab strip, tab menu and toolbar switcher need to know about one tab.
+struct ChromeTab: Equatable {
+    let number: Int
+    let title: String
+    /// nil for a new-tab (home) page.
+    let kind: PageKind?
+}
+
 @MainActor
 final class MiniWindowChromeView: NSView {
     struct Actions {
         var addTab: () -> Void
         var selectTab: (Int) -> Void
         var closeTab: (Int) -> Void
-        var openTerminal: () -> Void = {}
-        var openNovel: () -> Void = {}
+        var openPage: (PageKind) -> Void = { _ in }
         var dropNovel: ([URL]) -> Bool = { _ in false }
-        var openStocks: () -> Void = {}
-        var openNotes: () -> Void = {}
-        var openBrowser: () -> Void = {}
         var renameWindow: () -> Void = {}
+        var windowSettings: (NSView) -> Void
         var toggleAutomaticHiding: () -> Void
-        var settings: (NSView) -> Void
         var toggleLock: () -> Void
         var hide: () -> Void
         var close: () -> Void
@@ -23,41 +27,43 @@ final class MiniWindowChromeView: NSView {
 
     private let content = ChromeContentView()
     private let home = ChromeHomeView(frame: .zero)
-
     private let surfaceHost = NSView()
-    private let tabBar: WindowTabBar
+    private let tabStrip: WindowTabStrip
+    private let tabSwitcher = TabSwitcherButton()
     private let dragAction: (NSEvent) -> Void
-    private let automaticHidingButton: ChromeButton
-    let settingsButton: ChromeButton
+    private let closeTabAction: (Int) -> Void
+    /// The eye switches edge reveal, the slider opens transparency, the lock freezes pass-through.
+    let edgeRevealButton: ChromeButton
+    let windowButton: ChromeButton
     private let lockButton: ChromeButton
     private var toolbarButtons: [ChromeButton] = []
     private var isLocked = false
-    private var hasMultipleTabs = false
+    private var tabs: [ChromeTab] = []
+    private var selectedTab = 0
+    private var layoutState = ChromeLayout.make(width: 280, height: 360, tabCount: 0)
     private let hoverTip = ChromeTooltipView(frame: .zero)
     private let windowName = WindowNameLabel(labelWithString: "")
     private var hoverTimer: Timer?
     private weak var hoveredButton: ChromeButton?
 
     override var isFlipped: Bool { true }
-    var usesCompactToolbar: Bool { (window?.frame.width ?? bounds.width) < 280 }
+    var tabMode: ChromeLayout.TabMode { layoutState.tabMode }
+    var contentTop: CGFloat { layoutState.contentTop }
 
     init(actions: Actions) {
-        tabBar = WindowTabBar(select: actions.selectTab, close: actions.closeTab)
+        tabStrip = WindowTabStrip(select: actions.selectTab, close: actions.closeTab)
         dragAction = actions.drag
+        closeTabAction = actions.closeTab
         let addTab = ChromeButton(symbol: .add, label: "新建页签") { _ in actions.addTab() }
-        automaticHidingButton = ChromeButton(symbol: .eye, label: "开启边缘唤醒") { _ in
+        lockButton = ChromeButton(symbol: .lock, label: "锁定穿透") { _ in actions.toggleLock() }
+        edgeRevealButton = ChromeButton(symbol: .eye, label: "边缘唤醒") { _ in
             actions.toggleAutomaticHiding()
         }
-        lockButton = ChromeButton(symbol: .lock, label: "锁定穿透") { _ in actions.toggleLock() }
-        settingsButton = ChromeButton(symbol: .settings, label: "设置", action: actions.settings)
+        windowButton = ChromeButton(symbol: .settings, label: "窗口设置", action: actions.windowSettings)
         super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 360))
 
-        home.onOpenTerminal = actions.openTerminal
-        home.onOpenNovel = actions.openNovel
-        home.onOpenNotes = actions.openNotes
+        home.onOpenPage = actions.openPage
         home.onDropNovel = actions.dropNovel
-        home.onOpenStocks = actions.openStocks
-        home.onOpenBrowser = actions.openBrowser
         appearance = NSAppearance(named: .aqua)
         wantsLayer = true
         layer?.backgroundColor = ChromePalette.background.cgColor
@@ -67,7 +73,8 @@ final class MiniWindowChromeView: NSView {
 
         let hide = ChromeButton(symbol: .minus, label: "收起到菜单栏") { _ in actions.hide() }
         let close = ChromeButton(symbol: .close, label: "关闭小窗") { _ in actions.close() }
-        toolbarButtons = [addTab, automaticHidingButton, settingsButton, lockButton, hide, close]
+        // The order matches ChromeLayout: close, hide, add, edge reveal, window, lock.
+        toolbarButtons = [close, hide, addTab, edgeRevealButton, windowButton, lockButton]
         for button in toolbarButtons {
             button.onHover = { [weak self, weak button] entered in
                 guard let self, let button else { return }
@@ -77,7 +84,7 @@ final class MiniWindowChromeView: NSView {
             addSubview(button)
         }
         windowName.font = .systemFont(ofSize: 11, weight: .medium)
-        windowName.textColor = .secondaryLabelColor
+        windowName.textColor = OrielPalette.secondary
         windowName.alignment = .center
         windowName.lineBreakMode = .byTruncatingTail
         windowName.maximumNumberOfLines = 1
@@ -87,13 +94,18 @@ final class MiniWindowChromeView: NSView {
             actions.renameWindow()
         }
         addSubview(windowName)
+        tabSwitcher.isHidden = true
+        tabSwitcher.target = self
+        tabSwitcher.action = #selector(switcherPressed)
+        addSubview(tabSwitcher)
 
         addSubview(content)
         content.addSubview(home)
         surfaceHost.wantsLayer = true
         addSubview(surfaceHost)
-        tabBar.isHidden = true
-        addSubview(tabBar)
+        tabStrip.isHidden = true
+        tabStrip.onOverflow = { [weak self] anchor in self?.presentTabMenu(from: anchor) }
+        addSubview(tabStrip)
         hoverTip.isHidden = true
         addSubview(hoverTip)
         showHome()
@@ -105,29 +117,26 @@ final class MiniWindowChromeView: NSView {
     override func layout() {
         super.layout()
         dismissTooltip()
-        let narrow = bounds.width < 168
-        tabBar.isHidden = !hasMultipleTabs
-        let centers: [CGFloat?] = [
-            narrow ? 40 : 60, usesCompactToolbar ? nil : bounds.width - 74,
-            bounds.width - (narrow ? 42 : 46), Self.lockControlFrame(for: bounds.width).midX,
-            narrow ? 24 : 34, narrow ? 8 : 16
-        ]
-        for (button, center) in zip(toolbarButtons, centers) {
-            button.isHidden = center == nil || (isLocked && button === lockButton)
-            if let center {
-                let width: CGFloat = button.isWindowControl ? (narrow ? 16 : 18)
-                    : (narrow && button !== lockButton ? 16 : 28)
-                button.frame = NSRect(x: center - width / 2, y: 0, width: width, height: 28)
-            }
+        let layout = ChromeLayout.make(width: bounds.width, height: bounds.height, tabCount: tabs.count)
+        layoutState = layout
+        let frames = [layout.close, layout.hide, layout.addTab, layout.edgeReveal,
+                      layout.window, layout.lock]
+        for (button, frame) in zip(toolbarButtons, frames) {
+            button.frame = frame
+            button.isHidden = isLocked && button === lockButton
         }
-        let nameStart = toolbarButtons[0].frame.maxX + 4
-        let nameEnd = (usesCompactToolbar ? settingsButton : automaticHidingButton).frame.minX - 4
-        let nameWidth = max(0, nameEnd - nameStart)
-        windowName.frame = NSRect(x: nameStart, y: 6, width: nameWidth, height: 16)
-        windowName.isHidden = nameWidth < 24
-        tabBar.frame = NSRect(x: 6, y: 28, width: max(0, bounds.width - 12),
-                              height: tabBar.isHidden ? 0 : 24)
-        let contentTop: CGFloat = tabBar.frame.maxY + 4
+
+        let showsSwitcher = layout.tabMode == .switcher && layout.title != nil
+        tabSwitcher.isHidden = !showsSwitcher
+        windowName.isHidden = layout.title == nil || showsSwitcher
+        if let title = layout.title {
+            windowName.frame = title
+            tabSwitcher.frame = title.insetBy(dx: 0, dy: -2)
+        }
+        tabStrip.isHidden = layout.tabMode != .strip
+        tabStrip.frame = layout.tabStrip
+
+        let contentTop = layout.contentTop
         content.frame = NSRect(x: 6, y: contentTop, width: max(0, bounds.width - 12),
                                height: max(0, bounds.height - contentTop - 6))
         home.frame = content.bounds
@@ -155,12 +164,13 @@ final class MiniWindowChromeView: NSView {
     override func resetCursorRects() {
         super.resetCursorRects()
         var start: CGFloat = 6
-        for button in toolbarButtons.filter({ !$0.isHidden }).sorted(by: { $0.frame.minX < $1.frame.minX }) {
-            if button.frame.minX > start {
-                addCursorRect(NSRect(x: start, y: 6, width: button.frame.minX - start, height: 22),
-                              cursor: .openHand)
+        var occupied = toolbarButtons.filter { !$0.isHidden }.map(\.frame)
+        if !tabSwitcher.isHidden { occupied.append(tabSwitcher.frame) }
+        for frame in occupied.sorted(by: { $0.minX < $1.minX }) {
+            if frame.minX > start {
+                addCursorRect(NSRect(x: start, y: 6, width: frame.minX - start, height: 22), cursor: .openHand)
             }
-            start = button.frame.maxX
+            start = max(start, frame.maxX)
         }
     }
 
@@ -176,15 +186,16 @@ final class MiniWindowChromeView: NSView {
         needsLayout = true
     }
 
-    func setTabs(_ tabs: [(Int, String)], selected: Int) {
-        hasMultipleTabs = tabs.count > 1
-        tabBar.isHidden = !hasMultipleTabs
-        tabBar.setTabs(tabs, selected: selected)
+    func setTabs(_ tabs: [ChromeTab], selected: Int) {
+        self.tabs = tabs
+        selectedTab = selected
+        tabStrip.setTabs(tabs, selected: selected)
+        tabSwitcher.configure(tabs.first { $0.number == selected })
         needsLayout = true
     }
 
     func showTerminal(_ terminal: NSView) {
-        showSurface(terminal, inset: 4, background: .black)
+        showSurface(terminal, inset: 4, background: OrielPalette.terminal)
     }
 
     func showReadingSurface(_ view: NSView) {
@@ -202,7 +213,8 @@ final class MiniWindowChromeView: NSView {
     }
 
     func setContentOpacity(background: CGFloat, content: CGFloat, revealToolbar: Bool = false) {
-        tabBar.alphaValue = background
+        tabStrip.alphaValue = background
+        tabSwitcher.alphaValue = revealToolbar ? 1 : background
         windowName.alphaValue = revealToolbar ? 1 : background
         layer?.backgroundColor = ChromePalette.background.withAlphaComponent(background).cgColor
         for button in toolbarButtons {
@@ -217,21 +229,64 @@ final class MiniWindowChromeView: NSView {
         if self.isLocked != isLocked {
             dismissTooltip()
             self.isLocked = isLocked
-            tabBar.setEnabled(!isLocked)
+            tabStrip.setEnabled(!isLocked)
+            tabSwitcher.isEnabled = !isLocked
             home.setActionsEnabled(!isLocked)
             // The recovery child draws the lock while locked; never composite two copies.
             lockButton.isHidden = isLocked
             needsLayout = true
         }
         for button in toolbarButtons { button.isEnabled = !isLocked }
-        automaticHidingButton.setActive(automaticHiding,
-                                       label: automaticHiding ? "关闭边缘唤醒" : "开启边缘唤醒")
+        edgeRevealButton.setActive(automaticHiding,
+                                   label: automaticHiding ? "关闭边缘唤醒" : "开启边缘唤醒")
+        edgeRevealButton.setAccessibilityValue(automaticHiding ? "边缘唤醒已开启" : "边缘唤醒已关闭")
+        windowButton.setHint("透明度设置")
         lockButton.setActive(isLocked, label: isLocked ? "解除锁定穿透" : "锁定穿透")
     }
 
+    // MARK: Tab menu
+
+    @objc private func switcherPressed() { presentTabMenu(from: tabSwitcher) }
+
+    private func presentTabMenu(from anchor: NSView) {
+        guard !isLocked, !tabs.isEmpty else { return }
+        let menu = makeTabMenu()
+        menu.popUp(positioning: nil, at: NSPoint(x: anchor.bounds.minX, y: anchor.bounds.maxY + 2), in: anchor)
+    }
+
+    func makeTabMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let header = NSMenuItem(title: windowName.stringValue.isEmpty ? "小窗" : windowName.stringValue,
+                                action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+        menu.addItem(.separator())
+        for tab in tabs {
+            let item = NSMenuItem(title: tab.title, action: #selector(tabMenuSelected(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = tab.number
+            item.state = tab.number == selectedTab ? .on : .off
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        let close = NSMenuItem(title: "关闭当前页签", action: #selector(tabMenuClosed(_:)), keyEquivalent: "")
+        close.target = self
+        close.tag = selectedTab
+        close.isEnabled = !isLocked && tabs.contains { $0.number == selectedTab }
+        menu.addItem(close)
+        return menu
+    }
+
+    @objc private func tabMenuSelected(_ sender: NSMenuItem) { tabStrip.select(sender.tag) }
+
+    @objc private func tabMenuClosed(_ sender: NSMenuItem) {
+        guard !isLocked, tabs.contains(where: { $0.number == sender.tag }) else { return }
+        closeTabAction(sender.tag)
+    }
+
     static func lockControlFrame(for width: CGFloat) -> NSRect {
-        let center = width - 18
-        return NSRect(x: center - 14, y: 0, width: 28, height: 28)
+        ChromeLayout.lockFrame(forWidth: width)
     }
 
     static func makeLockRecoveryControl(unlock: @escaping () -> Void) -> ChromeButton {
@@ -282,190 +337,13 @@ private final class WindowNameLabel: NSTextField {
 }
 
 @MainActor
-private final class WindowTabBar: NSView {
-    private let picker = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let select: (Int) -> Void
-    private let close: (Int) -> Void
-    private var chips: [TabChip] = []
-    private var selectedNumber = 0
-    private var enabled = true
-
-    init(select: @escaping (Int) -> Void, close: @escaping (Int) -> Void) {
-        self.select = select
-        self.close = close
-        super.init(frame: .zero)
-        picker.controlSize = .small
-        picker.isBordered = false
-        picker.font = .systemFont(ofSize: 11)
-        picker.setAccessibilityLabel("选择页签")
-        picker.setAccessibilityHelp("展开所有页签，Control-Tab 切换到下一页")
-        picker.target = self
-        picker.action = #selector(selectMenuItem)
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    func setTabs(_ tabs: [(Int, String)], selected: Int) {
-        selectedNumber = selected
-        for chip in chips { chip.removeFromSuperview() }
-        picker.removeFromSuperview()
-        picker.removeAllItems()
-        chips = tabs.map { number, title in
-            let chip = TabChip(number: number, title: title, selected: number == selected,
-                               select: select, close: close)
-            addSubview(chip)
-            picker.addItem(withTitle: title)
-            picker.lastItem?.tag = number
-            return chip
-        }
-        picker.selectItem(withTag: selected)
-        addSubview(picker)
-        setEnabled(enabled)
-        needsLayout = true
-    }
-
-    func setEnabled(_ enabled: Bool) {
-        self.enabled = enabled
-        picker.isEnabled = enabled
-        for chip in chips { chip.setEnabled(enabled) }
-    }
-
-    override func layout() {
-        super.layout()
-        guard let selected = chips.firstIndex(where: { $0.number == selectedNumber }) else { return }
-        let spacing: CGFloat = 3
-        let widths = chips.map(\.preferredWidth)
-        let overflow = widths.reduce(0, +) + spacing * CGFloat(chips.count - 1) > bounds.width
-        picker.isHidden = !overflow
-
-        // Keep nearby tabs directly clickable. The selected tab's picker includes every tab.
-        var visible = Set(chips.indices)
-        var activeWidth = widths[selected]
-        if overflow {
-            activeWidth = min(bounds.width, max(widths[selected] + 18, 100))
-            visible = [selected]
-            var remaining = bounds.width - activeWidth
-            let neighbors = chips.indices.sorted {
-                let lhs = abs($0 - selected), rhs = abs($1 - selected)
-                return lhs == rhs ? $0 < $1 : lhs < rhs
-            }
-            for index in neighbors where index != selected && widths[index] + spacing <= remaining {
-                visible.insert(index)
-                remaining -= widths[index] + spacing
-            }
-        }
-        var x: CGFloat = 0
-        for (index, chip) in chips.enumerated() {
-            chip.isHidden = !visible.contains(index)
-            guard !chip.isHidden else { continue }
-            let usesPicker = overflow && index == selected
-            let width = index == selected ? activeWidth : widths[index]
-            chip.frame = NSRect(x: x, y: 1, width: width, height: 22)
-            chip.titleButton.isHidden = usesPicker
-            if usesPicker {
-                picker.frame = NSRect(x: x, y: 1, width: max(0, width - TabChip.closeWidth), height: 22)
-            }
-            x += width + spacing
-        }
-    }
-
-    @objc private func selectMenuItem() {
-        if let item = picker.selectedItem { select(item.tag) }
-    }
-}
-
-@MainActor
-private final class TabChip: NSView {
-    static let closeWidth: CGFloat = 21
-    let number: Int
-    let titleButton = NSButton()
-    private let closeButton = NSButton()
-    private var pointerInside = false {
-        didSet { updateCloseVisibility() }
-    }
-    private let select: (Int) -> Void
-    private let close: (Int) -> Void
-    private let selected: Bool
-    var preferredWidth: CGFloat { min(144, ceil(titleButton.intrinsicContentSize.width) + Self.closeWidth + 10) }
-
-    init(number: Int, title: String, selected: Bool,
-         select: @escaping (Int) -> Void, close: @escaping (Int) -> Void) {
-        self.number = number
-        self.selected = selected
-        self.select = select
-        self.close = close
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = 5
-        titleButton.title = title
-        titleButton.cell?.lineBreakMode = .byTruncatingTail
-        titleButton.font = .systemFont(ofSize: 11, weight: selected ? .semibold : .regular)
-        titleButton.setAccessibilityValue(selected)
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 9, weight: .medium))
-        closeButton.imagePosition = .imageOnly
-        closeButton.toolTip = "关闭" + title
-        closeButton.setAccessibilityLabel("关闭" + title)
-        closeButton.isHidden = true
-        for button in [titleButton, closeButton] {
-            button.isBordered = false
-            button.target = self
-            addSubview(button)
-        }
-        titleButton.action = #selector(selectPressed)
-        closeButton.action = #selector(closePressed)
-        addTrackingArea(NSTrackingArea(rect: .zero,
-                                       options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-                                       owner: self, userInfo: nil))
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    func setEnabled(_ enabled: Bool) {
-        titleButton.isEnabled = enabled
-        closeButton.isEnabled = enabled
-        updateCloseVisibility()
-        layer?.backgroundColor = (selected && enabled
-            ? NSColor.controlAccentColor.withAlphaComponent(0.16)
-            : NSColor.black.withAlphaComponent(0.055)).cgColor
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        guard let window else {
-            pointerInside = false
-            return
-        }
-        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        pointerInside = !isHiddenOrHasHiddenAncestor && visibleRect.contains(point)
-    }
-
-    override func mouseEntered(with event: NSEvent) { pointerInside = true }
-    override func mouseExited(with event: NSEvent) { pointerInside = false }
-
-    private func updateCloseVisibility() {
-        closeButton.isHidden = !pointerInside || !closeButton.isEnabled
-    }
-
-    override func layout() {
-        super.layout()
-        titleButton.frame = NSRect(x: 0, y: 0, width: bounds.width - Self.closeWidth, height: bounds.height)
-        closeButton.frame = NSRect(x: titleButton.frame.maxX, y: 0,
-                                   width: Self.closeWidth, height: bounds.height)
-    }
-
-    @objc private func selectPressed() { select(number) }
-    @objc private func closePressed() { close(number) }
-}
-
-@MainActor
 private final class ChromeTooltipView: NSView {
     private let label = NSTextField(labelWithString: "")
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.18, alpha: 0.96).cgColor
+        layer?.backgroundColor = OrielPalette.ink.withAlphaComponent(0.96).cgColor
         layer?.cornerRadius = 5
         label.font = .systemFont(ofSize: 11)
         label.textColor = .white
@@ -489,254 +367,11 @@ private final class ChromeTooltipView: NSView {
     }
 }
 
-@MainActor
-enum ChromePalette {
-    static let background = NSColor(srgbRed: 254 / 255, green: 254 / 255, blue: 254 / 255, alpha: 1)
-    static let ink = NSColor(srgbRed: 54 / 255, green: 54 / 255, blue: 54 / 255, alpha: 1)
-    static let secondary = NSColor(srgbRed: 154 / 255, green: 154 / 255, blue: 154 / 255, alpha: 1)
-    static let disabled = NSColor(srgbRed: 185 / 255, green: 185 / 255, blue: 185 / 255, alpha: 1)
-    static let divider = NSColor(srgbRed: 233 / 255, green: 233 / 255, blue: 233 / 255, alpha: 1)
-    static let hover = NSColor(srgbRed: 239 / 255, green: 239 / 255, blue: 239 / 255, alpha: 1)
-    static let pressed = NSColor(srgbRed: 226 / 255, green: 226 / 255, blue: 226 / 255, alpha: 1)
-}
+typealias ChromePalette = OrielPalette
 
 @MainActor
 private final class ChromeContentView: NSView {
     override var isFlipped: Bool { true }
-}
-
-@MainActor
-private final class ChromeHomeView: NSView {
-    var onOpenTerminal: (() -> Void)?
-    var onOpenNovel: (() -> Void)?
-    var onOpenNotes: (() -> Void)?
-    var onDropNovel: (([URL]) -> Bool)?
-    var onOpenStocks: (() -> Void)?
-    var onOpenBrowser: (() -> Void)?
-    private let stockButton = HomeTileButton(title: "自选股", target: nil, action: nil)
-    private let terminalButton = HomeTileButton(title: "终端", target: nil, action: nil)
-    private let heading: NSTextField
-    private let subtitle: NSTextField
-    private let novelButton = HomeTileButton(title: "小说", target: nil, action: nil)
-    private let notesButton = HomeTileButton(title: "便签", target: nil, action: nil)
-    private let browserButton = HomeTileButton(title: "浏览器", target: nil, action: nil)
-    private var backgroundOpacity: CGFloat = 1
-
-    private static let tileWidth: CGFloat = 44
-    private static let tileStep: CGFloat = 48
-
-    override var isFlipped: Bool { true }
-    private var isCompact: Bool { bounds.width < 240 || bounds.height < 264 }
-
-    override init(frame frameRect: NSRect) {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .center
-        paragraph.minimumLineHeight = 24
-        paragraph.maximumLineHeight = 24
-        heading = NSTextField(labelWithAttributedString: NSAttributedString(
-            string: "让常用内容触手可及\n专注眼前，随时查看",
-            attributes: [.font: NSFont(name: "PingFangSC-Semibold", size: 17)
-                            ?? NSFont.systemFont(ofSize: 17, weight: .semibold),
-                         .foregroundColor: ChromePalette.ink, .paragraphStyle: paragraph]
-        ))
-        heading.maximumNumberOfLines = 2
-        heading.cell?.wraps = true
-        subtitle = Self.label("或添加以下内容", size: 12)
-        super.init(frame: frameRect)
-        terminalButton.isBordered = false
-        terminalButton.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
-        terminalButton.font = .systemFont(ofSize: 11)
-        terminalButton.setAccessibilityLabel("终端")
-        terminalButton.target = self
-        terminalButton.action = #selector(openTerminal)
-        addSubview(terminalButton)
-        addSubview(heading)
-        addSubview(subtitle)
-        novelButton.isBordered = false
-        novelButton.font = terminalButton.font
-        novelButton.image = NSImage(systemSymbolName: "book", accessibilityDescription: nil)
-        novelButton.setAccessibilityLabel("小说")
-        novelButton.target = self
-        novelButton.action = #selector(openNovel)
-        addSubview(novelButton)
-        stockButton.isBordered = false
-        stockButton.font = terminalButton.font
-        stockButton.symbol = .stocks
-        stockButton.setAccessibilityLabel("自选股")
-        stockButton.target = self
-        stockButton.action = #selector(openStocks)
-        addSubview(stockButton)
-        notesButton.isBordered = false
-        notesButton.font = terminalButton.font
-        notesButton.image = NSImage(systemSymbolName: "note.text", accessibilityDescription: nil)
-        notesButton.setAccessibilityLabel("便签")
-        notesButton.target = self
-        notesButton.action = #selector(openNotes)
-        addSubview(notesButton)
-        browserButton.isBordered = false
-        browserButton.font = terminalButton.font
-        browserButton.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
-        browserButton.setAccessibilityLabel("浏览器")
-        browserButton.target = self
-        browserButton.action = #selector(openBrowser)
-        addSubview(browserButton)
-        registerForDraggedTypes([.fileURL])
-        setActionsEnabled(true)
-    }
-
-    private func incomingBooks(_ sender: NSDraggingInfo) -> [URL]? {
-        guard novelButton.isEnabled,
-              let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self],
-                  options: [.urlReadingFileURLsOnly: true]) as? [URL],
-              !urls.isEmpty, urls.allSatisfy({ ["epub", "txt"].contains($0.pathExtension.lowercased()) }) else { return nil }
-        return urls
-    }
-
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard incomingBooks(sender) != nil else { return [] }
-        novelButton.highlight(true)
-        return .copy
-    }
-
-    override func draggingExited(_ sender: NSDraggingInfo?) { novelButton.highlight(false) }
-    override func draggingEnded(_ sender: NSDraggingInfo) { novelButton.highlight(false) }
-
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        novelButton.highlight(false)
-        guard let urls = incomingBooks(sender) else { return false }
-        return onDropNovel?(urls) == true
-    }
-
-    func setActionsEnabled(_ enabled: Bool) {
-        for button in [terminalButton, novelButton, stockButton, notesButton, browserButton] {
-            button.isEnabled = enabled
-            button.toolTip = enabled ? "打开" + button.title : nil
-        }
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    @objc private func openNovel() { onOpenNovel?() }
-    @objc private func openNotes() { onOpenNotes?() }
-    @objc private func openBrowser() { onOpenBrowser?() }
-    @objc private func openStocks() { onOpenStocks?() }
-    @objc private func openTerminal() { onOpenTerminal?() }
-
-    func setBackgroundOpacity(_ background: CGFloat) {
-        backgroundOpacity = background
-        needsDisplay = true
-    }
-
-    private static func label(_ text: String, size: CGFloat) -> NSTextField {
-        let label = NSTextField(labelWithString: text)
-        label.font = NSFont.systemFont(ofSize: size)
-        label.textColor = ChromePalette.secondary
-        label.alignment = .center
-        return label
-    }
-
-    override func layout() {
-        super.layout()
-        for label in [heading, subtitle] { label.isHidden = isCompact }
-        let origin = NSPoint(x: (bounds.width - 240) / 2, y: (bounds.height - 240) / 2)
-        let tiles = [terminalButton, novelButton, stockButton, notesButton, browserButton]
-        let count = CGFloat(tiles.count)
-        let compactSide = min(40, bounds.height, max(0, bounds.width - 6) / count)
-        for (index, button) in tiles.enumerated() {
-            button.imagePosition = isCompact ? .imageOnly : .imageAbove
-            button.frame = isCompact
-                ? NSRect(x: bounds.midX - (count * compactSide + 2 * (count - 1)) / 2 + CGFloat(index) * (compactSide + 2),
-                         y: bounds.midY - compactSide / 2, width: compactSide, height: compactSide)
-                : NSRect(x: CGFloat(index) * Self.tileStep + origin.x, y: 182 + origin.y,
-                         width: Self.tileWidth, height: 56)
-        }
-        heading.frame = NSRect(x: origin.x, y: 80 + origin.y, width: 240, height: 48)
-        subtitle.frame = NSRect(x: 66 + origin.x, y: 144 + origin.y, width: 108, height: 20)
-        needsDisplay = true
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        guard !isCompact else { return }
-        let origin = NSAffineTransform()
-        origin.translateX(by: (bounds.width - 240) / 2, yBy: (bounds.height - 240) / 2)
-        origin.concat()
-        drawIllustration(center: NSPoint(x: 120, y: 30), scale: 0.75)
-
-        ChromePalette.divider.setStroke()
-        let divider = NSBezierPath()
-        divider.lineWidth = 0.6
-        divider.move(to: NSPoint(x: 16, y: 154))
-        divider.line(to: NSPoint(x: 60, y: 154))
-        divider.move(to: NSPoint(x: 180, y: 154))
-        divider.line(to: NSPoint(x: 224, y: 154))
-        divider.stroke()
-
-        for index in 0..<5 {
-            NSColor.white.withAlphaComponent(backgroundOpacity).setFill()
-            NSBezierPath(roundedRect: NSRect(x: CGFloat(index) * Self.tileStep, y: 182, width: Self.tileWidth, height: 56),
-                         xRadius: 4, yRadius: 4).fill()
-        }
-    }
-
-    private func drawIllustration(center: NSPoint, scale: CGFloat) {
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        let transform = NSAffineTransform()
-        transform.translateX(by: center.x, yBy: center.y)
-        transform.scale(by: scale)
-        transform.translateX(by: -152, yBy: -115)
-        transform.concat()
-        ChromePalette.ink.setStroke()
-        let window = NSBezierPath(roundedRect: NSRect(x: 124.9, y: 75.9, width: 54.2, height: 78.2),
-                                  xRadius: 8, yRadius: 8)
-        window.lineWidth = 1.8
-        window.stroke()
-        let illustration = NSBezierPath()
-        illustration.lineWidth = 1.8
-        illustration.lineCapStyle = .round
-        illustration.move(to: NSPoint(x: 125, y: 91))
-        illustration.line(to: NSPoint(x: 179, y: 91))
-        illustration.move(to: NSPoint(x: 144, y: 123))
-        illustration.line(to: NSPoint(x: 160, y: 123))
-        illustration.move(to: NSPoint(x: 152, y: 115))
-        illustration.line(to: NSPoint(x: 152, y: 131))
-        illustration.stroke()
-        ChromePalette.ink.setFill()
-        for center in [CGFloat(159), 165, 171] {
-            NSBezierPath(ovalIn: NSRect(x: center - 2, y: 82, width: 4, height: 4)).fill()
-        }
-
-    }
-
-}
-
-@MainActor
-private final class HomeTileButton: NSButton {
-    var symbol: ChromeSymbol?
-    override var isFlipped: Bool { true }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let compact = imagePosition == .imageOnly
-        let iconCenterY = compact ? bounds.midY : 18
-        let icon = NSRect(x: bounds.midX - 9, y: iconCenterY - 9, width: 18, height: 18)
-        if let symbol {
-            symbol.draw(in: icon, color: ChromePalette.ink.withAlphaComponent(isHighlighted ? 0.6 : 1))
-        } else {
-            image?.draw(in: icon, from: .zero, operation: .sourceOver, fraction: isHighlighted ? 0.6 : 1,
-                        respectFlipped: true, hints: nil)
-        }
-        guard !compact else { return }
-        let label = NSAttributedString(string: title, attributes: [
-            .font: font ?? .systemFont(ofSize: 11), .foregroundColor: ChromePalette.secondary
-        ])
-        let size = label.size()
-        label.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: 42 - size.height / 2))
-    }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 @MainActor
@@ -842,20 +477,21 @@ final class ChromeButton: NSButton {
             context.endTransparencyLayer()
             context.restoreGState()
         }
-        let highlightedLock = isEnabled && active && symbol == .lock
+        let highlighted = isEnabled && active && (symbol == .lock || symbol == .eye)
         if symbol == .minus || symbol == .close {
             drawTrafficLight()
         } else {
             if isEnabled && (hovered || isHighlighted || active) {
-                (highlightedLock ? NSColor.systemBlue.withAlphaComponent(0.14)
+                (highlighted ? OrielPalette.selection
                     : (isHighlighted ? ChromePalette.pressed : ChromePalette.hover)).setFill()
                 NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 3), xRadius: 4, yRadius: 4).fill()
             }
+            let tint = highlighted ? OrielPalette.accent : (isEnabled ? ChromePalette.ink : ChromePalette.disabled)
             symbol.draw(in: NSRect(x: bounds.midX - 7, y: bounds.midY - 7, width: 14, height: 14),
-                        color: highlightedLock ? .systemBlue : (isEnabled ? ChromePalette.ink : ChromePalette.disabled))
+                        color: tint)
         }
         if window?.firstResponder === self {
-            NSColor.keyboardFocusIndicatorColor.setStroke()
+            OrielPalette.accent.setStroke()
             let focus = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5)
             focus.lineWidth = 1.5
             focus.stroke()
@@ -885,7 +521,7 @@ final class ChromeButton: NSButton {
 }
 
 @MainActor
-private enum ChromeSymbol: Equatable {
+enum ChromeSymbol: Equatable {
     case add, eye, settings, lock, minus, close, stocks
 
     func draw(in rect: NSRect, color: NSColor) {

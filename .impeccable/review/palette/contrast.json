@@ -1,0 +1,68 @@
+{
+  "scope": "Opaque theme tokens. User-selected window/content transparency changes composite contrast; external sites, ANSI output, stock red/green and disabled states are not rethemed or certified here.",
+  "pairs": [
+    {
+      "foreground": "ink",
+      "background": "background",
+      "ratio": 12.27,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "secondary",
+      "background": "background",
+      "ratio": 5.65,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "secondary",
+      "background": "sidebar",
+      "ratio": 5.23,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "accent",
+      "background": "selection",
+      "ratio": 4.66,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "white",
+      "background": "accent",
+      "ratio": 5.76,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "accent",
+      "background": "activeTab",
+      "ratio": 5.07,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "amber",
+      "background": "activeTab",
+      "ratio": 4.66,
+      "minimum": 4.5,
+      "passes": true
+    },
+    {
+      "foreground": "border",
+      "background": "surface",
+      "ratio": 3.57,
+      "minimum": 3,
+      "passes": true
+    },
+    {
+      "foreground": "terminalInk",
+      "background": "terminal",
+      "ratio": 14.7,
+      "minimum": 4.5,
+      "passes": true
+    }
+  ]
+}

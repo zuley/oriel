@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Oriel Curious — monochrome menu mark</title>
+  <defs><clipPath id="rear"><path fill-rule="evenodd" clip-rule="evenodd" d="M0 0h64v64H0Z M27 30h27a10 10 0 0 1 10 10v14a10 10 0 0 1-10 10H27a10 10 0 0 1-10-10V40a10 10 0 0 1 10-10Z"/></clipPath></defs>
+  <g clip-path="url(#rear)" fill="black">
+    <path fill-rule="evenodd" d="M13 5h28a9 9 0 0 1 9 9v29a9 9 0 0 1-9 9H13a9 9 0 0 1-9-9V14a9 9 0 0 1 9-9Z M13.8 12.8a1.8 1.8 0 1 0-3.6 0 1.8 1.8 0 1 0 3.6 0Z M21.8 12.8a1.8 1.8 0 1 0-3.6 0 1.8 1.8 0 1 0 3.6 0Z M29.8 12.8a1.8 1.8 0 1 0-3.6 0 1.8 1.8 0 1 0 3.6 0Z M38 29.5a5 6.5 0 1 0-10 0 5 6.5 0 1 0 10 0Z M49 29.5a5 6.5 0 1 0-10 0 5 6.5 0 1 0 10 0Z"/>
+    <ellipse cx="35.25" cy="30.5" rx="2.25" ry="3.5"/><ellipse cx="46.25" cy="30.5" rx="2.25" ry="3.5"/>
+  </g>
+  <path fill="black" fill-rule="evenodd" d="M27 33h28a7 7 0 0 1 7 7v13a7 7 0 0 1-7 7H27a7 7 0 0 1-7-7V40a7 7 0 0 1 7-7Z M29.6 39.6a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0Z M36.6 39.6a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0Z M43.6 39.6a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0Z"/>
+</svg>

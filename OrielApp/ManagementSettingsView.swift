@@ -13,7 +13,7 @@ struct ManagementSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Toggle("启动时打开主界面", isOn: $settings.openAtLaunch).toggleStyle(.checkbox)
+                Toggle("启动时打开主界面", isOn: $settings.openAtLaunch).toggleStyle(.checkbox).tint(OrielPalette.tint)
                 Divider()
                 VStack(alignment: .leading, spacing: 14) {
                     Text("新小窗默认值").font(.system(size: 14, weight: .semibold))
@@ -21,10 +21,10 @@ struct ManagementSettingsView: View {
                         Text("尺寸").frame(width: 70, alignment: .leading)
                         TextField("宽", value: $settings.width, format: .number.precision(.fractionLength(0)))
                             .accessibilityLabel("默认宽度").frame(width: 70).textFieldStyle(.roundedBorder)
-                        Text("×").foregroundStyle(.secondary)
+                        Text("×").foregroundStyle(OrielPalette.mutedText)
                         TextField("高", value: $settings.height, format: .number.precision(.fractionLength(0)))
                             .accessibilityLabel("默认高度").frame(width: 70).textFieldStyle(.roundedBorder)
-                        Text("pt").foregroundStyle(.secondary)
+                        Text("pt").foregroundStyle(OrielPalette.mutedText)
                     }
                     opacityRow("背景", value: $settings.backgroundOpacity)
                     opacityRow("内容", value: $settings.contentOpacity)
@@ -44,13 +44,13 @@ struct ManagementSettingsView: View {
                         Button("恢复默认") { resetting = true }
                     }
                     Text("默认值用于新建小窗；左侧完全透明，右侧完全可见。")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(OrielPalette.mutedText)
                 }
                 Divider()
                 VStack(alignment: .leading, spacing: 10) {
                     Text("本地数据").font(.system(size: 14, weight: .semibold))
                     Text("便签、书架、自选股和阅读进度保存在本机。")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(OrielPalette.mutedText)
                     HStack {
                         Button("导出数据…", action: chooseExport).disabled(exporting)
                         Button("打开数据目录") {
@@ -59,14 +59,14 @@ struct ManagementSettingsView: View {
                                 NSWorkspace.shared.open(model.dataDirectory)
                             } catch { failed = true; notice = error.localizedDescription; exportURL = nil }
                         }
-                        if exporting { ProgressView().controlSize(.small); Text("正在导出…").foregroundStyle(.secondary) }
+                        if exporting { ProgressView().controlSize(.small); Text("正在导出…").foregroundStyle(OrielPalette.mutedText) }
                     }
                     Text("导出为独立副本，含废纸篓；暂不支持一键恢复。")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(OrielPalette.mutedText)
                 }
                 if let notice {
                     HStack(alignment: .top) {
-                        Image(systemName: failed ? "exclamationmark.circle" : "checkmark.circle").foregroundStyle(failed ? .orange : .secondary)
+                        Image(systemName: failed ? "exclamationmark.circle" : "checkmark.circle").foregroundStyle(failed ? Color(nsColor: OrielPalette.amber) : OrielPalette.mutedText)
                         Text(notice).textSelection(.enabled)
                         Spacer(minLength: 0)
                         if let exportURL { Button("查看") { NSWorkspace.shared.activateFileViewerSelecting([exportURL]) } }
@@ -87,7 +87,7 @@ struct ManagementSettingsView: View {
     private func opacityRow(_ label: String, value: Binding<Double>) -> some View {
         HStack(spacing: 8) {
             Text(label).frame(width: 70, alignment: .leading)
-            Slider(value: value, in: 0...1).accessibilityLabel("默认\(label)透明度").frame(maxWidth: 270)
+            Slider(value: value, in: 0...1).tint(OrielPalette.tint).accessibilityLabel("默认\(label)透明度").frame(maxWidth: 270)
         }
     }
 

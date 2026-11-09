@@ -7,7 +7,7 @@ import WebKit
 final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, NSTextFieldDelegate {
     private static let toolbarHeight: CGFloat = 30
     private static let ink = ChromePalette.ink
-    private static let quiet = NSColor(srgbRed: 108 / 255, green: 108 / 255, blue: 108 / 255, alpha: 1)
+    private static let quiet = OrielPalette.secondary
 
     /// Called when the text shown for this page's tab changes.
     var onTitleChange: (() -> Void)?
@@ -20,11 +20,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     private let reloadButton: ToolbarButton
     private let menuButton: ToolbarButton
     private let addressPill = AddressPill()
-    private let addressField: AddressField = {
-        let field = AddressField()
-        field.cell = AddressFieldCell(textCell: "")
-        return field
-    }()
+    private let addressField = AddressField()
     private let secureIcon = NSImageView()
     private let divider = NSView()
     private let progressBar = NSView()
@@ -80,7 +76,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         super.init(frame: frame)
 
         wantsLayer = true
-        layer?.backgroundColor = NSColor.white.cgColor
+        layer?.backgroundColor = OrielPalette.surface.cgColor
         appearance = NSAppearance(named: .aqua)
         for (control, action) in [(backButton, #selector(goBackPressed)), (forwardButton, #selector(goForwardPressed)),
                                   (reloadButton, #selector(reloadPressed)), (menuButton, #selector(showMenu))] {
@@ -89,9 +85,12 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
             addSubview(control)
         }
         addSubview(addressPill)
+        addressPill.onFocusRequest = { [weak self] in self?.focusAddress() }
         addressField.placeholderString = "搜索或输入网址"
         addressField.font = .systemFont(ofSize: 12)
         addressField.isBordered = false
+        addressField.isBezeled = false
+        addressField.cell?.isScrollable = true
         addressField.drawsBackground = false
         addressField.textColor = Self.ink
         addressField.focusRingType = .none
@@ -113,7 +112,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         divider.layer?.backgroundColor = ChromePalette.divider.cgColor
         addSubview(divider)
         progressBar.wantsLayer = true
-        progressBar.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        progressBar.layer?.backgroundColor = OrielPalette.accent.cgColor
         progressBar.isHidden = true
         addSubview(progressBar)
 
@@ -177,7 +176,12 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         secureIcon.isHidden = !showIcon
         secureIcon.frame = NSRect(x: 8, y: (addressPill.bounds.height - 12) / 2, width: 12, height: 12)
         let leading: CGFloat = addressEditing ? 6 : (width >= 120 ? 22 : 6)
-        addressField.frame = NSRect(x: leading, y: 0, width: max(0, width - leading - 6), height: addressPill.bounds.height)
+        // Give the native text field its natural line height, centered in the pill.
+        // Drawing and the shared field editor then use the same control bounds.
+        let pillHeight = addressPill.bounds.height
+        let textHeight = min(pillHeight, ceil(addressField.cell?.cellSize.height ?? pillHeight))
+        addressField.frame = NSRect(x: leading, y: (pillHeight - textHeight) / 2,
+                                   width: max(0, width - leading - 6), height: textHeight)
     }
 
     private func beginAddressEditing() {
@@ -246,6 +250,8 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     }
 
     func focusAddress() {
+        // Finish the first layout before AppKit creates the shared text editor.
+        layoutSubtreeIfNeeded()
         window?.makeFirstResponder(addressField)
     }
 
@@ -645,52 +651,11 @@ private final class UserAgentField: NSTextField, NSTextFieldDelegate {
     }
 }
 
-/// Draws, edits and selects text on the vertical middle of the field instead of its top edge.
-@MainActor
-private final class AddressFieldCell: NSTextFieldCell {
-    private let horizontalInset: CGFloat = 0
-
-    override init(textCell string: String) {
-        super.init(textCell: string)
-        isEditable = true
-        isScrollable = true
-        usesSingleLineMode = true
-    }
-
-    required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    private func centered(_ rect: NSRect) -> NSRect {
-        var area = rect.insetBy(dx: horizontalInset, dy: 0)
-        let height = cellSize(forBounds: rect).height
-        if height < area.height {
-            area.origin.y += (area.height - height) / 2
-            area.size.height = height
-        }
-        return area
-    }
-
-    override func titleRect(forBounds rect: NSRect) -> NSRect { centered(rect) }
-
-    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
-        super.drawInterior(withFrame: titleRect(forBounds: cellFrame), in: controlView)
-    }
-
-    override func edit(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText,
-                       delegate: Any?, event: NSEvent?) {
-        super.edit(withFrame: titleRect(forBounds: rect), in: controlView, editor: textObj, delegate: delegate, event: event)
-    }
-
-    override func select(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText,
-                         delegate: Any?, start selStart: Int, length selLength: Int) {
-        super.select(withFrame: titleRect(forBounds: rect), in: controlView, editor: textObj,
-                     delegate: delegate, start: selStart, length: selLength)
-    }
-}
-
 /// The rounded surface behind the address; turns white with an outline while editing.
 @MainActor
 private final class AddressPill: NSView {
     var isFocused = false { didSet { refresh() } }
+    var onFocusRequest: (() -> Void)?
     override var isFlipped: Bool { true }
 
     override init(frame frameRect: NSRect) {
@@ -703,12 +668,16 @@ private final class AddressPill: NSView {
 
     required init?(coder: NSCoder) { nil }
 
+    override func mouseDown(with event: NSEvent) {
+        onFocusRequest?()
+    }
+
     private func refresh() {
         layer?.backgroundColor = isFocused
-            ? NSColor.white.cgColor
-            : NSColor(srgbRed: 241 / 255, green: 241 / 255, blue: 241 / 255, alpha: 1).cgColor
+            ? OrielPalette.surface.cgColor
+            : OrielPalette.field.cgColor
         layer?.borderWidth = isFocused ? 1.5 : 0
-        layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.85).cgColor
+        layer?.borderColor = OrielPalette.accent.cgColor
     }
 }
 

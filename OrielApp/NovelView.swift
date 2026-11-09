@@ -11,7 +11,7 @@ struct NovelView: View {
     @StateObject private var discovery = CatalogDiscovery()
     @State private var query = ""
     @State private var removing: ShelfBook?
-    private let accent = Color(red: 0.19, green: 0.37, blue: 0.34)
+    private let accent = OrielPalette.tint
 
     var body: some View {
         GeometryReader { geometry in
@@ -63,7 +63,7 @@ struct NovelView: View {
             }
         }
         .font(.system(size: 12))
-        .foregroundStyle(Color.primary)
+        .foregroundStyle(OrielPalette.text)
         .tint(accent)
         .buttonStyle(.plain)
         .onAppear { session.start() }
@@ -98,7 +98,7 @@ struct NovelView: View {
                         Image(systemName: "books.vertical").font(.title2).foregroundStyle(accent)
                         Text("书架还是空的").fontWeight(.medium)
                         Button("导入本地书", action: chooseFile).foregroundStyle(accent)
-                        Button("去书库选书") { session.section = .catalog }.foregroundStyle(.secondary)
+                        Button("去书库选书") { session.section = .catalog }.foregroundStyle(OrielPalette.mutedText)
                     }.frame(maxWidth: .infinity).padding(.vertical, 14)
                 }
             } else {
@@ -122,7 +122,7 @@ struct NovelView: View {
                             if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 discoveryFooter(empty: found.isEmpty)
                             }
-                            Text("Project Gutenberg").font(.system(size: 9)).foregroundStyle(.secondary)
+                            Text("Project Gutenberg").font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(8)
                         } else {
                             let books = library.recent.filter { filter.matches($0.title + ($0.author ?? "")) }
@@ -134,7 +134,7 @@ struct NovelView: View {
                                     session.open(book)
                                 }.contextMenu { Button("从书架移除") { removing = book } }
                             }
-                            if books.isEmpty { Text("没有匹配的书").foregroundStyle(.secondary).padding(8) }
+                            if books.isEmpty { Text("没有匹配的书").foregroundStyle(OrielPalette.mutedText).padding(8) }
                         }
                     }
                 }
@@ -158,14 +158,14 @@ struct NovelView: View {
         } else if let next = discovery.next {
             Button("更多结果") { discovery.search(query, from: next) }.foregroundStyle(accent).padding(6)
         } else if empty {
-            Text("没有匹配的书").foregroundStyle(.secondary).padding(6)
+            Text("没有匹配的书").foregroundStyle(OrielPalette.mutedText).padding(6)
         }
     }
 
     private func sectionButton(_ title: String, _ section: NovelSession.Section) -> some View {
         Button { session.section = section; session.notice = nil } label: {
             Text(title).fontWeight(session.section == section ? .semibold : .regular)
-                .foregroundStyle(session.section == section ? Color.primary : Color.secondary)
+                .foregroundStyle(session.section == section ? OrielPalette.text : OrielPalette.mutedText)
                 .padding(.horizontal, 2).frame(height: 25)
                 .overlay(alignment: .bottom) {
                     if session.section == section { Capsule().fill(accent).frame(height: 2) }
@@ -192,10 +192,10 @@ struct NovelView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                        Text(detail).font(.system(size: 10)).lineLimit(1).foregroundStyle(.secondary)
+                        Text(detail).font(.system(size: 10)).lineLimit(1).foregroundStyle(OrielPalette.mutedText)
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: mark).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Image(systemName: mark).font(.system(size: 10)).foregroundStyle(OrielPalette.mutedText)
                 }
                 .padding(.horizontal, width > 155 ? 9 : 3).padding(.vertical, 6)
                 .contentShape(Rectangle())
@@ -206,7 +206,7 @@ struct NovelView: View {
 
     private func searchBox(_ placeholder: String) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            Image(systemName: "magnifyingglass").foregroundStyle(OrielPalette.mutedText)
             TextField(placeholder, text: $query).textFieldStyle(.plain)
             if !query.isEmpty { icon("xmark.circle.fill", "清除搜索") { query = "" } }
         }.padding(.horizontal, 7).frame(height: 25)
@@ -355,7 +355,7 @@ struct NovelView: View {
                                 } label: {
                                     VStack(alignment: .leading, spacing: 2) {
                                         if session.chapters.indices.contains(mark.chapter) {
-                                            Text(session.chapters[mark.chapter].title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                            Text(session.chapters[mark.chapter].title).font(.caption).foregroundStyle(OrielPalette.mutedText).lineLimit(1)
                                         }
                                         Text(mark.excerpt).lineLimit(2)
                                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
@@ -393,7 +393,7 @@ struct NovelView: View {
                             }.id(i)
                             Divider()
                         }
-                        if indices.isEmpty { Text("没有匹配的章节").foregroundStyle(.secondary).padding(6) }
+                        if indices.isEmpty { Text("没有匹配的章节").foregroundStyle(OrielPalette.mutedText).padding(6) }
                     }
                 }.onAppear { proxy.scrollTo(session.chapter, anchor: .center) }
             }
@@ -426,7 +426,7 @@ private struct NovelLookupView: View {
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().accessibilityLabel("搜索结果")
                 } else if !query.isEmpty {
                     Button { query = ""; focused = true } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(OrielPalette.mutedText)
                     }.accessibilityLabel("清除搜索")
                 }
             }.padding(.trailing, 5)
@@ -460,16 +460,16 @@ private struct NovelLookupView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             if session.chapters.indices.contains(hit.chapter) {
-                                Text(session.chapters[hit.chapter].title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(session.chapters[hit.chapter].title).font(.caption).foregroundStyle(OrielPalette.mutedText).lineLimit(1)
                             }
                             Text(hit.excerpt).lineLimit(2)
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(6).contentShape(Rectangle())
                     }
                     Divider()
                 }
-                if matches.hasMore { Text("前 80 处 · 可继续输入").font(.caption).foregroundStyle(.secondary).padding(6) }
+                if matches.hasMore { Text("前 80 处 · 可继续输入").font(.caption).foregroundStyle(OrielPalette.mutedText).padding(6) }
                 if !query.isEmpty && matches.hits.isEmpty {
-                    Text(searching ? "正在查找…" : "没有找到匹配的文字").foregroundStyle(.secondary).padding(6)
+                    Text(searching ? "正在查找…" : "没有找到匹配的文字").foregroundStyle(OrielPalette.mutedText).padding(6)
                 }
             }
         }

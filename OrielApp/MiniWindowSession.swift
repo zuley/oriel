@@ -28,7 +28,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
          onNameChange: @escaping () -> Void,
          onClose: @escaping (UUID) -> Void) {
         self.number = number
-        self.name = "小窗 \(number)"
+        self.name = "小窗"
         self.group = group
         self.onClose = onClose
         self.onStateChange = onStateChange

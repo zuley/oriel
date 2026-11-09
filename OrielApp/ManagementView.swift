@@ -3,25 +3,32 @@ import SwiftUI
 struct ManagementView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var state: ManagementState
-    private let accent = Color(red: 0.19, green: 0.37, blue: 0.34)
+    private let accent = OrielPalette.tint
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Oriel").font(.system(size: 20, weight: .semibold)).padding(.horizontal, 12).padding(.top, 16).padding(.bottom, 18)
+                HStack(spacing: 7) {
+                    if let url = Bundle.main.url(forResource: "OrielMark", withExtension: "pdf", subdirectory: "Brand"),
+                       let image = NSImage(contentsOf: url) {
+                        Image(nsImage: image).resizable().frame(width: 30, height: 30)
+                            .accessibilityHidden(true)
+                    }
+                    Text("Oriel").font(.system(size: 20, weight: .semibold))
+                }.padding(.horizontal, 8).padding(.top, 12).padding(.bottom, 12)
                 ForEach(ManagementState.Section.allCases) { section in
                     Button { state.section = section } label: {
                         Label(section.rawValue, systemImage: section.icon)
                             .font(.system(size: 13, weight: section == state.section ? .semibold : .regular))
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: 34)
-                            .foregroundStyle(section == state.section ? accent : .primary)
-                            .background(section == state.section ? accent.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                            .foregroundStyle(section == state.section ? accent : OrielPalette.text)
+                            .background(section == state.section ? Color(nsColor: OrielPalette.selection) : .clear, in: RoundedRectangle(cornerRadius: 6))
                     }.buttonStyle(.plain).accessibilityAddTraits(section == state.section ? .isSelected : [])
                 }
                 Spacer()
                 Text("关闭主界面，小窗仍可用")
-                    .font(.system(size: 10)).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.bottom, 14)
-            }.padding(.horizontal, 8).frame(width: 164).background(Color(nsColor: .windowBackgroundColor))
+                    .font(.system(size: 10)).foregroundStyle(OrielPalette.mutedText).padding(.horizontal, 12).padding(.bottom, 14)
+            }.padding(.horizontal, 8).frame(width: 164).background(Color(nsColor: OrielPalette.sidebar))
             Divider()
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
@@ -34,9 +41,9 @@ struct ManagementView: View {
                     case .settings: ManagementSettingsView(settings: model.preferences, model: model)
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }.padding(24).background(Color(nsColor: .controlBackgroundColor))
+            }.padding(24).background(Color(nsColor: OrielPalette.background))
         }
-        .tint(accent)
+        .foregroundStyle(OrielPalette.text)
     }
 }
 
@@ -46,9 +53,10 @@ private struct WorkspaceManagementView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("\(model.windows.count) 个小窗").foregroundStyle(.secondary)
+                Text("\(model.windows.count) 个小窗").foregroundStyle(OrielPalette.mutedText)
                 Spacer()
                 Button { model.create() } label: { Label("新建小窗", systemImage: "plus") }
+                    .buttonStyle(.borderedProminent).tint(OrielPalette.tint)
             }
             if model.windows.isEmpty {
                 ManagementEmptyView(icon: "rectangle.on.rectangle", title: "还没有小窗", detail: "创建小窗后，在小窗中添加和使用内容。") { EmptyView() }
@@ -78,7 +86,7 @@ private struct ManagedWindowRow: View {
     var body: some View {
         if let snapshot = window.snapshot {
             HStack(spacing: 12) {
-                Image(systemName: "macwindow").font(.system(size: 22, weight: .light)).foregroundStyle(.secondary)
+                Image(systemName: "macwindow").font(.system(size: 22, weight: .light)).foregroundStyle(OrielPalette.mutedText)
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
                         Text(window.name).font(.system(size: 14, weight: .medium))
@@ -87,14 +95,14 @@ private struct ManagedWindowRow: View {
                             nameDraft = window.name
                             renaming = true
                         } label: {
-                            Image(systemName: "pencil").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Image(systemName: "pencil").font(.system(size: 11)).foregroundStyle(OrielPalette.mutedText)
                                 .frame(width: 20, height: 20).contentShape(Rectangle())
                         }.buttonStyle(.plain).help("重命名")
                             .accessibilityLabel("重命名 \(window.name)")
                     }
                     HStack(spacing: 6) {
                         Circle().fill(snapshot.isVisible ? Color.green : Color.gray).frame(width: 6, height: 6)
-                        Text(snapshot.isVisible ? "已显示" : "已隐藏").foregroundStyle(.secondary)
+                        Text(snapshot.isVisible ? "已显示" : "已隐藏").foregroundStyle(OrielPalette.mutedText)
                     }
                 }
                 Spacer()
@@ -126,9 +134,9 @@ struct ManagementEmptyView<Action: View>: View {
     @ViewBuilder var action: () -> Action
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 28, weight: .light)).foregroundStyle(.tertiary)
+            Image(systemName: icon).font(.system(size: 28, weight: .light)).foregroundStyle(OrielPalette.mutedText)
             Text(title).font(.system(size: 15, weight: .medium))
-            Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(detail).font(.system(size: 12)).foregroundStyle(OrielPalette.mutedText).multilineTextAlignment(.center)
             action().padding(.top, 4)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }

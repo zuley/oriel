@@ -6,7 +6,7 @@ struct NotesView: View {
     @ObservedObject var workspace: NotesWorkspace
     var open: (NoteDocument) -> Void
     var export: () -> Void
-    private let accent = Color(red: 0.19, green: 0.37, blue: 0.34)
+    private let accent = OrielPalette.tint
 
     var body: some View {
         GeometryReader { geometry in
@@ -32,14 +32,14 @@ struct NotesView: View {
                             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().accessibilityLabel("便签操作")
                     }
                     if workspace.loadError != nil {
-                        icon("exclamationmark.circle", "便签恢复提示", action: showRecovery).foregroundStyle(.orange)
+                        icon("exclamationmark.circle", "便签恢复提示", action: showRecovery).foregroundStyle(Color(nsColor: OrielPalette.amber))
                     }
                     NoteStatus(document: session.document, workspace: workspace).frame(width: 14)
                 }.frame(height: 22).padding(.horizontal, 4)
                 if session.showingList { list }
                 else if session.document.record.deleted != nil {
                     VStack(spacing: 4) {
-                        Text("已移到回收站").foregroundStyle(.secondary)
+                        Text("已移到回收站").foregroundStyle(OrielPalette.mutedText)
                         Button("恢复便签") { restore(session.document) }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -49,7 +49,7 @@ struct NotesView: View {
             }
             }.frame(width: geometry.size.width, height: geometry.size.height)
         }
-        .font(.system(size: 11)).foregroundStyle(Color.primary).tint(accent).buttonStyle(.plain)
+        .font(.system(size: 11)).foregroundStyle(OrielPalette.text).tint(accent).buttonStyle(.plain)
     }
 
     private var pocket: some View {
@@ -136,7 +136,7 @@ struct NotesView: View {
     private var list: some View {
         VStack(spacing: 0) {
             HStack(spacing: 3) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").foregroundStyle(OrielPalette.mutedText)
                 NotesSearch(session: session, submit: {
                     if let first = workspace.list(query: session.query, trash: session.showingTrash).first {
                         if session.showingTrash { restore(first) } else { open(first) }
@@ -150,7 +150,7 @@ struct NotesView: View {
                 LazyVStack(spacing: 0) {
                     if workspace.loadError != nil {
                         Button("有恢复提示 · 查看") { showRecovery() }
-                            .foregroundStyle(.orange).frame(maxWidth: .infinity, alignment: .leading).padding(6)
+                            .foregroundStyle(Color(nsColor: OrielPalette.amber)).frame(maxWidth: .infinity, alignment: .leading).padding(6)
                     }
                     let documents = workspace.list(query: session.query, trash: session.showingTrash)
                     ForEach(documents) { document in
@@ -161,13 +161,13 @@ struct NotesView: View {
                                 if document.record.pinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(accent) }
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(document.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                                    Text(preview(document)).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(preview(document)).font(.system(size: 10)).foregroundStyle(OrielPalette.mutedText).lineLimit(1)
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                                 if let error = document.errorMessage {
-                                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).help(error)
+                                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color(nsColor: OrielPalette.amber)).help(error)
                                 }
                                 Image(systemName: session.showingTrash ? "arrow.uturn.backward" : "chevron.right")
-                                    .font(.system(size: 9)).foregroundStyle(.tertiary)
+                                    .font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
                             }.padding(.horizontal, 6).padding(.vertical, 7).contentShape(Rectangle())
                         }.accessibilityLabel(session.showingTrash ? "恢复：" + document.title : document.title)
                         .contextMenu {
@@ -180,7 +180,7 @@ struct NotesView: View {
                     }
                     if documents.isEmpty {
                         VStack(spacing: 5) {
-                            Text(session.query.isEmpty ? (session.showingTrash ? "回收站为空" : "还没有便签") : "没有匹配的便签").foregroundStyle(.secondary)
+                            Text(session.query.isEmpty ? (session.showingTrash ? "回收站为空" : "还没有便签") : "没有匹配的便签").foregroundStyle(OrielPalette.mutedText)
                             if !session.query.isEmpty { Button("清除搜索") { session.query = "" } }
                             else if !session.showingTrash { Button("新建便签") { open(workspace.create()) } }
                         }.padding(8).frame(maxWidth: .infinity)
@@ -225,7 +225,7 @@ private struct NoteStatus: View {
     var body: some View {
         ZStack {
             if let error = document.errorMessage {
-                Button { details = true } label: { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).frame(width: 18, height: 22) }
+                Button { details = true } label: { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color(nsColor: OrielPalette.amber)).frame(width: 18, height: 22) }
                     .accessibilityLabel(document.isDirty ? "未保存" : "操作未完成").help(error)
                     .popover(isPresented: $details) {
                         VStack(alignment: .leading, spacing: 8) {
@@ -272,8 +272,9 @@ struct NotesEditor: NSViewRepresentable {
         editor.isAutomaticDashSubstitutionEnabled = false
         editor.drawsBackground = false
         editor.font = .systemFont(ofSize: 13)
-        editor.textColor = .labelColor
-        editor.insertionPointColor = .labelColor
+        editor.textColor = OrielPalette.ink
+        editor.insertionPointColor = OrielPalette.accent
+        editor.selectedTextAttributes = [.backgroundColor: OrielPalette.textSelection, .foregroundColor: OrielPalette.ink]
         editor.textContainerInset = NSSize(width: compact ? 3 : 6, height: compact ? 2 : 6)
         editor.isVerticallyResizable = true
         editor.isHorizontallyResizable = false
@@ -345,7 +346,7 @@ final class NotesTextView: NSTextView {
         guard string.isEmpty else { return }
         let point = NSPoint(x: textContainerOrigin.x + (textContainer?.lineFragmentPadding ?? 0), y: textContainerOrigin.y)
         ("开始记录…" as NSString).draw(at: point, withAttributes: [
-            .font: font ?? NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.placeholderTextColor
+            .font: font ?? NSFont.systemFont(ofSize: 13), .foregroundColor: OrielPalette.secondary
         ])
     }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {

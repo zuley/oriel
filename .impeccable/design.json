@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-09T03:34:15Z",
+  "title": "Design System: Oriel",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "近白画布"
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "浅灰侧栏"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "白色表面"
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "浅灰输入区"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "中性正文"
+      },
+      "secondary": {
+        "role": "neutral",
+        "displayName": "灰色辅助文字"
+      },
+      "disabled": {
+        "role": "neutral",
+        "displayName": "禁用图标"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "珊瑚色点缀"
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "浅灰选中底色"
+      },
+      "amber": {
+        "role": "neutral",
+        "displayName": "语义警告"
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "浅灰分隔线"
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "灰色边界"
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "中性悬停"
+      },
+      "pressed": {
+        "role": "neutral",
+        "displayName": "中性按下"
+      },
+      "terminal": {
+        "role": "neutral",
+        "displayName": "黑色终端"
+      },
+      "terminalInk": {
+        "role": "neutral",
+        "displayName": "浅灰终端文字"
+      },
+      "textSelection": {
+        "role": "neutral",
+        "displayName": "中性文本选区"
+      }
+    }
+  },
+  "components": [],
+  "narrative": {
+    "overview": "保持原有白灰中性底色和简洁素雅的原生界面，05A 珊瑚色仅用于主要操作与少量状态点缀；不铺桃色或黄色背景。"
+  }
+}
