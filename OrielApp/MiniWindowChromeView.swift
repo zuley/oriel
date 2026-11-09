@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 /// What the tab strip, tab menu and toolbar switcher need to know about one tab.
 struct ChromeTab: Equatable {
@@ -40,6 +41,9 @@ final class MiniWindowChromeView: NSView {
     private var isLocked = false
     private var tabs: [ChromeTab] = []
     private var selectedTab = 0
+    private weak var presentedContent: NSView?
+    private var presentedTab: Int?
+    private static let contentTransitionKey = "oriel.contentSwitch"
     private var layoutState = ChromeLayout.make(width: 280, height: 360, tabCount: 0)
     private let hoverTip = ChromeTooltipView(frame: .zero)
     private let windowName = WindowNameLabel(labelWithString: "")
@@ -100,6 +104,7 @@ final class MiniWindowChromeView: NSView {
         addSubview(tabSwitcher)
 
         addSubview(content)
+        content.wantsLayer = true
         content.addSubview(home)
         surfaceHost.wantsLayer = true
         addSubview(surfaceHost)
@@ -192,6 +197,45 @@ final class MiniWindowChromeView: NSView {
         tabStrip.setTabs(tabs, selected: selected)
         tabSwitcher.configure(tabs.first { $0.number == selected })
         needsLayout = true
+        animateContentSwitchIfNeeded()
+    }
+
+    /// Activation presents the new page before refreshing its tabs. Animate only that
+    /// change; title updates keep the current page and its animation untouched.
+    private func animateContentSwitchIfNeeded() {
+        let container = content.isHidden ? surfaceHost : content
+        let page = content.isHidden ? surfaceHost.subviews.first : home
+        let changed = presentedTab != selectedTab || presentedContent !== page
+        let hadContent = presentedTab != nil
+        presentedTab = selectedTab
+        presentedContent = page
+        guard changed else { return }
+
+        let layer = container.layer
+        let interruptedOpacity = layer?.animation(forKey: Self.contentTransitionKey) != nil
+            ? layer?.presentation()?.opacity : nil
+        cancelContentTransition()
+        guard hadContent, window?.isVisible == true, !container.isHiddenOrHasHiddenAncestor,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+              let layer, layer.opacity > 0 else { return }
+
+        // Animate presentation only: user opacity, layout, hit testing and focus stay current.
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = interruptedOpacity ?? layer.opacity * 0.6
+        fade.toValue = layer.opacity
+        fade.duration = 0.16
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        layer.add(fade, forKey: Self.contentTransitionKey)
+    }
+
+    private func cancelContentTransition() {
+        content.layer?.removeAnimation(forKey: Self.contentTransitionKey)
+        surfaceHost.layer?.removeAnimation(forKey: Self.contentTransitionKey)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { cancelContentTransition() }
     }
 
     func showTerminal(_ terminal: NSView) {
@@ -213,6 +257,9 @@ final class MiniWindowChromeView: NSView {
     }
 
     func setContentOpacity(background: CGFloat, content: CGFloat, revealToolbar: Bool = false) {
+        if self.content.alphaValue != content || surfaceHost.alphaValue != content {
+            cancelContentTransition()
+        }
         tabStrip.alphaValue = background
         tabSwitcher.alphaValue = revealToolbar ? 1 : background
         windowName.alphaValue = revealToolbar ? 1 : background
@@ -228,6 +275,7 @@ final class MiniWindowChromeView: NSView {
     func update(isLocked: Bool, automaticHiding: Bool) {
         if self.isLocked != isLocked {
             dismissTooltip()
+            if isLocked { cancelContentTransition() }
             self.isLocked = isLocked
             tabStrip.setEnabled(!isLocked)
             tabSwitcher.isEnabled = !isLocked

@@ -112,4 +112,58 @@ final class WindowChromeLayoutTests: XCTestCase {
         NSApplication.shared.sendAction(action, to: item.target, from: item)
         XCTAssertTrue(closed.isEmpty)
     }
+
+    func testRapidContentSwitchesKeepTheLatestPageFocusAndOpacity() throws {
+        _ = NSApplication.shared
+        let chrome = makeChrome()
+        let tabs = [ChromeTab(number: 1, title: "首页", kind: nil),
+                    ChromeTab(number: 2, title: "浏览器", kind: .browser)]
+        chrome.setTabs(tabs, selected: 1)
+        let panel = NSPanel(contentRect: chrome.frame, styleMask: [.borderless, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.contentView = chrome
+        panel.orderBack(nil)
+        defer { panel.close() }
+        chrome.setContentOpacity(background: 0.6, content: 0.35)
+
+        let field = NSTextField()
+        chrome.showReadingSurface(field)
+        panel.makeFirstResponder(field)
+        let editor = try XCTUnwrap(field.currentEditor())
+        chrome.setTabs(tabs, selected: 2)
+        let surface = try XCTUnwrap(field.superview)
+        let opacity = try XCTUnwrap(surface.layer).opacity
+        XCTAssertTrue(panel.firstResponder === editor)
+        XCTAssertEqual(surface.alphaValue, 0.35)
+        let fade = surface.layer?.animation(forKey: "oriel.contentSwitch") as? CABasicAnimation
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            XCTAssertNil(fade)
+        } else {
+            XCTAssertNotNil(fade)
+            XCTAssertEqual(try XCTUnwrap(fade?.toValue as? Float), opacity)
+        }
+
+        chrome.showHome()
+        chrome.setTabs(tabs, selected: 1)
+        chrome.showReadingSurface(field)
+        panel.makeFirstResponder(field)
+        chrome.setTabs(tabs, selected: 2)
+        XCTAssertTrue(field.superview === surface)
+        XCTAssertFalse(surface.isHidden)
+        XCTAssertTrue(panel.firstResponder === field.currentEditor())
+        XCTAssertEqual(surface.alphaValue, 0.35)
+        XCTAssertEqual(surface.layer?.opacity, opacity)
+
+        chrome.setContentOpacity(background: 0.6, content: 0.2)
+        XCTAssertNil(surface.layer?.animation(forKey: "oriel.contentSwitch"))
+        XCTAssertEqual(surface.alphaValue, 0.2)
+        chrome.showHome()
+        chrome.setTabs(tabs, selected: 1)
+        chrome.update(isLocked: true, automaticHiding: false)
+        let homeContainer = try XCTUnwrap(chrome.subviews.first { $0.subviews.contains { $0 is ChromeHomeView } })
+        XCTAssertNil(homeContainer.layer?.animation(forKey: "oriel.contentSwitch"))
+        XCTAssertTrue(surface.isHidden)
+        XCTAssertEqual(homeContainer.alphaValue, 0.2)
+    }
 }
