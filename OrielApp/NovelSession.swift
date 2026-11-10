@@ -29,6 +29,24 @@ final class NovelLibrary: ObservableObject {
         }
     }
 
+    /// Decoded chapters shared by every tab reading the same book. Held weakly: when the
+    /// last tab closes the book (about 47 MiB for a 30 MiB text), the copy is released.
+    private let openBooks = NSMapTable<NSString, ChapterBox>.strongToWeakObjects()
+
+    final class ChapterBox {
+        let chapters: [NovelChapter]
+        init(_ chapters: [NovelChapter]) { self.chapters = chapters }
+    }
+
+    func chapters(of book: ShelfBook) async throws -> ChapterBox {
+        if let open = openBooks.object(forKey: book.id as NSString) { return open }
+        let box = ChapterBox(try await shelf.chapters(of: book))
+        // Another tab may have finished decoding the same book meanwhile.
+        if let open = openBooks.object(forKey: book.id as NSString) { return open }
+        openBooks.setObject(box, forKey: book.id as NSString)
+        return box
+    }
+
     /// The latest reading place, including a scroll position not yet written.
     func place(for book: String) -> ReadingPlace {
         pendingPlaces[book] ?? places.place(for: book)
@@ -89,6 +107,7 @@ final class NovelLibrary: ObservableObject {
     func remove(_ book: ShelfBook) async throws {
         try await shelf.remove(book)
         pendingPlaces[book.id] = nil
+        openBooks.removeObject(forKey: book.id as NSString)
         places.remove(book: book.id)
         removedBook.send(book.id)
         try await refresh()
@@ -107,6 +126,8 @@ final class NovelSession: ObservableObject {
     var onBookChanged: (() -> Void)?
     @Published private(set) var book: ShelfBook? { didSet { if book?.id != oldValue?.id { onBookChanged?() } } }
     @Published private(set) var chapters: [NovelChapter] = []
+    /// Keeps the shared decoded copy alive while this tab shows the book.
+    private var openBook: NovelLibrary.ChapterBox?
     @Published private(set) var chapter = 0
     private(set) var offset = 0
     private(set) var highlight: NSRange?
@@ -215,12 +236,14 @@ final class NovelSession: ObservableObject {
         try Task.checkCancellation()
         openingBookID = saved.id
         defer { if !Task.isCancelled { openingBookID = nil } }
-        let text = try await library.shelf.chapters(of: saved)
+        let box = try await library.chapters(of: saved)
+        let text = box.chapters
         try await library.refresh()
         try Task.checkCancellation()
         let place = library.place(for: saved.id)
         highlight = nil
         book = saved
+        openBook = box
         chapters = text
         chapter = min(place.chapter, text.count - 1)
         offset = min(place.offset, (text[chapter].text as NSString).length)
@@ -274,6 +297,7 @@ final class NovelSession: ObservableObject {
         library.flushPlaces()
         book = nil
         chapters = []
+        openBook = nil
         section = .shelf
     }
 

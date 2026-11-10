@@ -175,6 +175,27 @@ final class NovelSessionTests: XCTestCase {
         XCTAssertEqual(storedOffset(defaults, book.id), 3)
     }
 
+    // R21: tabs reading the same book share one decoded copy.
+    func testTwoReadersOfOneBookShareTheDecodedChapters() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { try? FileManager.default.removeItem(at: folder); defaults.removePersistentDomain(forName: suite) }
+        let library = NovelLibrary(root: folder, defaults: defaults)
+        let book = try await library.shelf.add(data: Data("第一章\n共享。\n第二章\n同一份。".utf8), name: "共享.txt")
+        let first = NovelSession(library: library)
+        let second = NovelSession(library: library)
+        first.open(book)
+        try await settle(first)
+        second.open(book)
+        try await settle(second)
+        func storage(_ session: NovelSession) -> UnsafeRawPointer? {
+            session.chapters.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
+        }
+        XCTAssertEqual(second.chapters, first.chapters)
+        XCTAssertEqual(storage(second), storage(first), "The second tab must not decode its own copy.")
+    }
+
     private func settle(_ session: NovelSession) async throws {
         try await waitUntil { session.busy == nil }
         XCTAssertNil(session.notice)
