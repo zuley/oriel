@@ -556,7 +556,8 @@ final class ChromeButton: NSButton {
                 NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 3), xRadius: 4, yRadius: 4).fill()
             }
             let tint = highlighted ? OrielPalette.accent : (isEnabled ? ChromePalette.ink : ChromePalette.disabled)
-            symbol.draw(in: NSRect(x: bounds.midX - 7, y: bounds.midY - 7, width: 14, height: 14),
+            let icon = symbol == .fold && active ? ChromeSymbol.unfold : symbol
+            icon.draw(in: NSRect(x: bounds.midX - 7, y: bounds.midY - 7, width: 14, height: 14),
                         color: tint)
         }
         if window?.firstResponder === self {
@@ -591,7 +592,7 @@ final class ChromeButton: NSButton {
 
 @MainActor
 enum ChromeSymbol: Equatable {
-    case add, fold, eye, settings, lock, minus, close, stocks
+    case add, fold, unfold, eye, settings, lock, minus, close, stocks
 
     func draw(in rect: NSRect, color: NSColor) {
         NSGraphicsContext.saveGraphicsState()
@@ -618,8 +619,18 @@ enum ChromeSymbol: Equatable {
             line([NSPoint(x: 3, y: 10), NSPoint(x: 17, y: 10)])
             line([NSPoint(x: 10, y: 3), NSPoint(x: 10, y: 17)])
         case .fold:
-            line([NSPoint(x: 3, y: 4), NSPoint(x: 17, y: 4)])
-            line([NSPoint(x: 5, y: 13), NSPoint(x: 10, y: 8), NSPoint(x: 15, y: 13)])
+            path.appendRoundedRect(NSRect(x: 3.5, y: 8.5, width: 13, height: 3), xRadius: 1.5, yRadius: 1.5)
+            line([NSPoint(x: 10, y: 1), NSPoint(x: 10, y: 6.5)])
+            line([NSPoint(x: 6.5, y: 3), NSPoint(x: 10, y: 6.5), NSPoint(x: 13.5, y: 3)])
+            line([NSPoint(x: 10, y: 19), NSPoint(x: 10, y: 13.5)])
+            line([NSPoint(x: 6.5, y: 17), NSPoint(x: 10, y: 13.5), NSPoint(x: 13.5, y: 17)])
+        case .unfold:
+            line([NSPoint(x: 6, y: 6), NSPoint(x: 3, y: 6), NSPoint(x: 3, y: 14), NSPoint(x: 6, y: 14)])
+            line([NSPoint(x: 14, y: 6), NSPoint(x: 17, y: 6), NSPoint(x: 17, y: 14), NSPoint(x: 14, y: 14)])
+            line([NSPoint(x: 10, y: 7), NSPoint(x: 10, y: 1)])
+            line([NSPoint(x: 6.5, y: 4.5), NSPoint(x: 10, y: 1), NSPoint(x: 13.5, y: 4.5)])
+            line([NSPoint(x: 10, y: 13), NSPoint(x: 10, y: 19)])
+            line([NSPoint(x: 6.5, y: 15.5), NSPoint(x: 10, y: 19), NSPoint(x: 13.5, y: 15.5)])
         case .eye:
             path.move(to: NSPoint(x: 1, y: 10))
             path.curve(to: NSPoint(x: 19, y: 10), controlPoint1: NSPoint(x: 5, y: 2),
