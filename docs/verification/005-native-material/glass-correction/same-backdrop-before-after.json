@@ -1,0 +1,57 @@
+{
+  "id": "a1b17fd4-36c9-4121-b0ec-695dd82906be",
+  "ok": true,
+  "result": {
+    "snapshot": {
+      "coordinateSpace": "window",
+      "window": {
+        "width": 528,
+        "isOffscreen": false,
+        "isMinimized": false,
+        "screenIndex": 0,
+        "platform": {
+          "layer": 0
+        },
+        "id": 63052,
+        "x": 500,
+        "height": 412,
+        "y": 388,
+        "title": "Oriel — actual material before / after"
+      },
+      "focusedElementId": null,
+      "elementCount": 5,
+      "app": {
+        "bundleId": "app.oriel.materialprobe",
+        "pid": 73274,
+        "name": "MaterialProbe"
+      },
+      "id": "1185BC69-013A-4AB9-8F5C-F6659A9D4F14",
+      "truncation": {
+        "truncated": false,
+        "maxDepth": 64,
+        "maxDepthReached": false,
+        "maxNodes": 1200
+      },
+      "treeText": "App=app.oriel.materialprobe (pid 73274)\nWindow: \"Oriel — actual material before / after\", App: MaterialProbe.\n\n0 standard window Oriel — actual material before / after\n\t1 close button\n\t2 zoom button (disabled)\n\t3 minimize button (disabled)\n\t4 text Oriel — actual material before / after\n\nNo UI element is currently focused."
+    },
+    "screenshotStatus": {
+      "metadata": {
+        "windowId": 63052,
+        "engine": "screenCaptureKit"
+      },
+      "state": "captured"
+    },
+    "screenshot": {
+      "width": 528,
+      "height": 412,
+      "scale": 1,
+      "format": "png",
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/a1b17fd4-36c9-4121-b0ec-695dd82906be-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T15:10:29.196Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "64754d98-695e-4166-96ae-5270063fd87f"
+  }
+}

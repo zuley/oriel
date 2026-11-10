@@ -1,0 +1,57 @@
+{
+  "id": "a4dca4cc-589b-422f-959b-9a2322a92981",
+  "ok": true,
+  "result": {
+    "snapshot": {
+      "window": {
+        "isOffscreen": false,
+        "screenIndex": 0,
+        "isMinimized": false,
+        "id": 63011,
+        "title": "透明度设置",
+        "height": 72,
+        "platform": {
+          "layer": 25
+        },
+        "width": 224,
+        "x": 1636,
+        "y": 90
+      },
+      "id": "B5763119-B4B4-4B12-925C-994C2A9D005F",
+      "elementCount": 7,
+      "focusedElementId": 7,
+      "treeText": "App=app.oriel.materialqa.20261110 (pid 70061)\nWindow: \"透明度设置\", App: Oriel.\n\n7 system dialog 透明度设置\n\t8 text 内容透明度\n\t9 slider (settable) 内容透明度, Value: 0.75, Secondary Actions: increment, decrement\n\t\t10 value indicator 0.75\n\t11 text 背景透明度\n\t12 slider (settable) 背景透明度, Value: 0.75, Secondary Actions: increment, decrement\n\t\t13 value indicator 0.75\n\nThe focused UI element is 7 system dialog 透明度设置.",
+      "truncation": {
+        "truncated": false,
+        "maxDepth": 64,
+        "maxDepthReached": false,
+        "maxNodes": 1200
+      },
+      "app": {
+        "bundleId": "app.oriel.materialqa.20261110",
+        "pid": 70061,
+        "name": "Oriel"
+      },
+      "coordinateSpace": "window"
+    },
+    "screenshotStatus": {
+      "metadata": {
+        "windowId": 63011,
+        "engine": "screenCaptureKit"
+      },
+      "state": "captured"
+    },
+    "screenshot": {
+      "width": 224,
+      "height": 72,
+      "scale": 1,
+      "format": "png",
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/a4dca4cc-589b-422f-959b-9a2322a92981-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T14:53:54.289Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "64754d98-695e-4166-96ae-5270063fd87f"
+  }
+}

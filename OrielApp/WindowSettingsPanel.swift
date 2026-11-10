@@ -28,10 +28,6 @@ final class WindowSettingsPanel: NSPanel {
 
     func show(below anchor: NSView) {
         guard let owner = anchor.window, let content = contentViewController?.view else { return }
-        content.wantsLayer = true
-        content.layer?.backgroundColor = OrielPalette.surface.cgColor
-        content.layer?.cornerRadius = 8
-        content.layer?.masksToBounds = true
         let anchorFrame = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let size = content.frame.size
         let screen = owner.screen?.visibleFrame ?? owner.frame
@@ -149,7 +145,28 @@ final class WindowSettingsController: NSViewController {
     }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 224, height: 72))
+        let frame = NSRect(x: 0, y: 0, width: 224, height: 72)
+        let controls: NSView
+        if #available(macOS 26, *) {
+            // The legacy menu material renders nearly opaque on macOS 26.
+            // Native glass samples the backdrop; its contentView keeps controls sharp.
+            let glass = NSGlassEffectView(frame: frame)
+            glass.style = .regular
+            glass.cornerRadius = 8
+            controls = NSView(frame: frame)
+            glass.contentView = controls
+            view = glass
+        } else {
+            let material = NSVisualEffectView(frame: frame)
+            material.material = .menu
+            material.blendingMode = .behindWindow
+            material.state = .active
+            material.wantsLayer = true
+            material.layer?.cornerRadius = 8
+            material.layer?.masksToBounds = true
+            controls = material
+            view = material
+        }
         view.appearance = NSAppearance(named: .aqua)
         let rows: [(String, NSSlider, CGFloat)] = [
             ("内容透明度", contentSlider, 44),
@@ -166,8 +183,8 @@ final class WindowSettingsController: NSViewController {
             slider.action = #selector(sliderChanged)
             slider.setAccessibilityLabel(title)
             slider.setAccessibilityHelp("向左变透明，向右变清晰")
-            view.addSubview(label)
-            view.addSubview(slider)
+            controls.addSubview(label)
+            controls.addSubview(slider)
         }
     }
 

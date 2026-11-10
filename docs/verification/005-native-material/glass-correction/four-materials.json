@@ -1,0 +1,57 @@
+{
+  "id": "ad0c029b-ba15-44cb-a90e-90293e0f83e5",
+  "ok": true,
+  "result": {
+    "snapshot": {
+      "elementCount": 5,
+      "treeText": "App=app.oriel.materialprobe (pid 72273)\nWindow: \"Oriel material comparison — patterned backdrop\", App: MaterialProbe.\n\n0 standard window Oriel material comparison — patterned backdrop\n\t1 close button\n\t2 zoom button (disabled)\n\t3 minimize button (disabled)\n\t4 text Oriel material comparison — patterned backdrop\n\nNo UI element is currently focused.",
+      "id": "EEDCB54A-11A4-4A18-9BC1-31C06F208C4D",
+      "app": {
+        "bundleId": "app.oriel.materialprobe",
+        "pid": 72273,
+        "name": "MaterialProbe"
+      },
+      "window": {
+        "x": 300,
+        "height": 412,
+        "title": "Oriel material comparison — patterned backdrop",
+        "isMinimized": false,
+        "platform": {
+          "layer": 0
+        },
+        "width": 1016,
+        "screenIndex": 0,
+        "isOffscreen": false,
+        "id": 63035,
+        "y": 388
+      },
+      "coordinateSpace": "window",
+      "focusedElementId": null,
+      "truncation": {
+        "truncated": false,
+        "maxDepth": 64,
+        "maxDepthReached": false,
+        "maxNodes": 1200
+      }
+    },
+    "screenshotStatus": {
+      "metadata": {
+        "engine": "screenCaptureKit",
+        "windowId": 63035
+      },
+      "state": "captured"
+    },
+    "screenshot": {
+      "width": 1016,
+      "height": 412,
+      "scale": 1,
+      "format": "png",
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/ad0c029b-ba15-44cb-a90e-90293e0f83e5-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T15:06:52.568Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "64754d98-695e-4166-96ae-5270063fd87f"
+  }
+}
