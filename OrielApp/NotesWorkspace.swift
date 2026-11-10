@@ -294,6 +294,36 @@ final class NotesSession: ObservableObject {
         focusSearch?()
     }
 
+    /// ⌘F: find in the note body. A pocket-sized note, a deleted note, or a list without
+    /// a body falls back to the list search.
+    func find() {
+        guard document.record.deleted == nil else { showList(); return }
+        if showingList {
+            showingList = false
+            showingTrash = false
+            // The body comes back on the next SwiftUI update.
+            DispatchQueue.main.async { [weak self] in self?.showFindBar() }
+            return
+        }
+        showFindBar()
+    }
+
+    /// ⌘G / ⌘⇧G while the find bar is in use.
+    func findNext(backwards: Bool) {
+        guard let editor = document.editorView?.documentView as? NotesTextView, !editor.compact else { return }
+        let item = NSMenuItem()
+        item.tag = (backwards ? NSTextFinder.Action.previousMatch : .nextMatch).rawValue
+        editor.performTextFinderAction(item)
+    }
+
+    private func showFindBar() {
+        guard let editor = document.editorView?.documentView as? NotesTextView, !editor.compact,
+              editor.window != nil else { showList(); return }
+        let item = NSMenuItem()
+        item.tag = NSTextFinder.Action.showFindInterface.rawValue
+        editor.performTextFinderAction(item)
+    }
+
     func export(in window: NSWindow) {
         guard savePanel == nil else { return }
         document.commitEditing?()

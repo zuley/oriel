@@ -669,12 +669,18 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             selected.browser?.zoomIn()
             return true
         }
+        if selected.page == .notes {
+            if modifiers == [.command, .option], key == "f" { selected.notes?.showList(); return true }
+            if modifiers == [.command, .shift], key == "g" { selected.notes?.findNext(backwards: true); return true }
+        }
         if modifiers == .command {
             switch key {
             case "n" where selected.page == .notes:
                 openNote(NotesWorkspace.shared.create(), in: selected); return true
             case "f" where selected.page == .notes:
-                selected.notes?.showList(); return true
+                selected.notes?.find(); return true
+            case "g" where selected.page == .notes:
+                selected.notes?.findNext(backwards: false); return true
             case "s" where selected.page == .notes:
                 try? NotesWorkspace.shared.saveAll(); return true
             case "o" where selected.page == .novel:

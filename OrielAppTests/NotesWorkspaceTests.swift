@@ -450,3 +450,52 @@ extension NotesWorkspaceTests {
         XCTAssertEqual(try Data(contentsOf: backup), backupBytes, "A corrupt primary must never replace the backup.")
     }
 }
+
+// R06: ⌘F finds in the note body; ⌥⌘F opens the list search.
+extension NotesWorkspaceTests {
+    private func hostedSession(height: CGFloat) throws -> (NotesSession, NSWindow, NSHostingView<NotesView>) {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let workspace = NotesWorkspace(root: root, automaticSaving: false)
+        let document = workspace.create()
+        document.edit("购物清单\n牛奶\n鸡蛋\n牛奶面包")
+        let session = NotesSession(workspace: workspace, document: document)
+        let hosting = NSHostingView(rootView: NotesView(session: session, workspace: workspace, open: { _ in }, export: {}))
+        let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 280, height: height),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        hosting.layoutSubtreeIfNeeded()
+        addTeardownBlock { @MainActor in window.contentView = nil; document.releaseEditor() }
+        return (session, window, hosting)
+    }
+
+    func testFindShowsTheFindBarInTheNoteBody() async throws {
+        let (session, _, hosting) = try hostedSession(height: 320)
+        session.find()
+        hosting.layoutSubtreeIfNeeded()
+        let scroll = try XCTUnwrap(session.document.editorView)
+        XCTAssertTrue(scroll.isFindBarVisible)
+        XCTAssertFalse(session.showingList)
+    }
+
+    func testFindFromTheListReturnsToTheBodyFirst() async throws {
+        let (session, _, hosting) = try hostedSession(height: 320)
+        session.showList()
+        hosting.layoutSubtreeIfNeeded()
+        session.find()
+        for _ in 0..<20 where session.document.editorView?.isFindBarVisible != true {
+            hosting.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertFalse(session.showingList)
+        XCTAssertEqual(session.document.editorView?.isFindBarVisible, true)
+    }
+
+    func testFindInAPocketSizedNoteOpensTheListSearch() throws {
+        let (session, _, hosting) = try hostedSession(height: 50)
+        session.find()
+        hosting.layoutSubtreeIfNeeded()
+        XCTAssertTrue(session.showingList, "A find bar does not fit; fall back to the list search.")
+    }
+}

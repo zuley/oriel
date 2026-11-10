@@ -253,6 +253,7 @@ struct NotesEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         context.coordinator.syncedText = document.text
         if let scroll = document.editorView, let editor = scroll.documentView as? NotesTextView {
+            editor.compact = compact
             editor.delegate = context.coordinator
             context.coordinator.editor = editor
             document.commitEditing = { [weak editor] in editor?.commit() }
@@ -265,9 +266,12 @@ struct NotesEditor: NSViewRepresentable {
         scroll.borderType = .noBorder
         let editor = NotesTextView(frame: scroll.bounds)
         editor.note = document
+        editor.compact = compact
         editor.delegate = context.coordinator
         editor.isRichText = false
         editor.importsGraphics = false
+        editor.usesFindBar = true
+        editor.isIncrementalSearchingEnabled = true
         editor.allowsUndo = true
         editor.isAutomaticQuoteSubstitutionEnabled = false
         editor.isAutomaticDashSubstitutionEnabled = false
@@ -302,6 +306,7 @@ struct NotesEditor: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let editor = scroll.documentView as? NotesTextView else { return }
+        editor.compact = compact
         editor.textContainerInset = NSSize(width: compact ? 3 : 6, height: compact ? 2 : 6)
         // Runs on every keystroke (the document is observed). Typing already put the
         // model's text in `syncedText`, so this is a byte comparison of the same buffer;
@@ -347,6 +352,8 @@ struct NotesEditor: NSViewRepresentable {
 
 final class NotesTextView: NSTextView {
     weak var note: NoteDocument?
+    /// The pocket layout (under 68 pt high), where a find bar does not fit.
+    var compact = false
     override var undoManager: UndoManager? { note?.undo }
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
