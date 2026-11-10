@@ -391,3 +391,62 @@ extension NotesWorkspaceTests {
         document.releaseEditor()
     }
 }
+
+// R01: lighter note saves (docs/plans/017-refactor-tasks.md).
+extension NotesWorkspaceTests {
+    private func record(_ id: UUID, _ text: String) -> NoteRecord {
+        NoteRecord(id: id, text: text, created: Date(timeIntervalSince1970: 1), updated: Date())
+    }
+
+    func testBackupHoldsThePreviousVersionAfterEachSave() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = NotesStore(root: root)
+        let id = UUID()
+        try store.save(record(id, "第一版"))
+        try store.save(record(id, "第二版"))
+        try store.save(record(id, "第三版"))
+        let primary = root.appending(path: id.uuidString + ".json")
+        let backup = primary.appendingPathExtension("backup")
+        let decode = { (url: URL) in try JSONDecoder().decode(NoteRecord.self, from: Data(contentsOf: url)).text }
+        XCTAssertEqual(try decode(primary), "第三版")
+        XCTAssertEqual(try decode(backup), "第二版")
+        // The backup must be its own file, not a link that later writes could reach.
+        let inode = { (url: URL) in try FileManager.default.attributesOfItem(atPath: url.path)[.systemFileNumber] as? Int }
+        XCTAssertNotEqual(try inode(primary), try inode(backup))
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: root.path).contains { $0.hasPrefix(".") },
+                       "No temporary backup links may be left behind.")
+    }
+
+    func testRepeatedSavesOfAKnownFileSkipTheReadBack() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = NotesStore(root: root)
+        let id = UUID()
+        try store.save(record(id, "一"))
+        try store.save(record(id, "二"))
+        try store.save(record(id, "三"))
+        XCTAssertEqual(store.verificationReads, 0, "Files this store wrote need no read-back.")
+
+        let reloaded = NotesStore(root: root)
+        _ = try reloaded.load()
+        try reloaded.save(record(id, "四"))
+        XCTAssertEqual(reloaded.verificationReads, 0, "Files this store loaded need no read-back.")
+    }
+
+    func testExternallyChangedPrimaryIsVerifiedAgainAndCorruptionKeepsTheBackup() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = NotesStore(root: root)
+        let id = UUID()
+        try store.save(record(id, "原始"))
+        try store.save(record(id, "可靠版本"))
+        let primary = root.appending(path: id.uuidString + ".json")
+        let backup = primary.appendingPathExtension("backup")
+        let backupBytes = try Data(contentsOf: backup)
+        try Data("{ broken".utf8).write(to: primary)
+        XCTAssertThrowsError(try store.save(record(id, "新内容")))
+        XCTAssertEqual(store.verificationReads, 1)
+        XCTAssertEqual(try Data(contentsOf: backup), backupBytes, "A corrupt primary must never replace the backup.")
+    }
+}

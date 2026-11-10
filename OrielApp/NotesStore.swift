@@ -50,9 +50,29 @@ enum NotesError: LocalizedError {
     }
 }
 
-struct NotesStore {
+/// One JSON file per note plus `.backup`, the previous successful version.
+/// Not thread-safe; the notes workspace uses it on the main actor.
+final class NotesStore {
     let root: URL
     private let files = FileManager.default
+    /// Size and modification date of each primary this store last read or wrote. A primary
+    /// that still matches needs no read-back before it becomes the backup.
+    private var known: [UUID: FileStamp] = [:]
+    /// How many saves had to read and decode the existing primary (for tests).
+    private(set) var verificationReads = 0
+
+    private struct FileStamp: Equatable {
+        let size: Int
+        let modified: Date
+    }
+
+    init(root: URL) { self.root = root }
+
+    private func stamp(_ url: URL) -> FileStamp? {
+        guard let attributes = try? files.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? Int, let modified = attributes[.modificationDate] as? Date else { return nil }
+        return FileStamp(size: size, modified: modified)
+    }
 
     struct Loaded {
         var records: [NoteRecord] = []
@@ -66,7 +86,11 @@ struct NotesStore {
         var result = Loaded()
         for url in urls {
             let id = url.deletingPathExtension().lastPathComponent
-            do { result.records.append(try read(url, id: id)) }
+            do {
+                let record = try read(url, id: id)
+                result.records.append(record)
+                known[record.id] = stamp(url)
+            }
             catch NotesError.unsupportedVersion {
                 result.issues.append("一张便签需要较新版本，原件已保留。")
             } catch {
@@ -79,6 +103,7 @@ struct NotesStore {
                     try files.copyItem(at: url, to: recovery.appending(path: id + "-" + UUID().uuidString + ".json"))
                     try Data(contentsOf: backup).write(to: url, options: .atomic)
                     result.records.append(record)
+                    known[record.id] = stamp(url)
                     result.issues.append("已恢复一张便签的上一份副本，损坏原件已保留。")
                 } catch { result.issues.append("一张便签无法读取，原件已保留，其余便签仍可使用。") }
             }
@@ -100,12 +125,36 @@ struct NotesStore {
         guard record.text.utf8.count <= NoteRecord.textLimit else { throw NotesError.tooLarge }
         try files.createDirectory(at: root, withIntermediateDirectories: true)
         let url = root.appending(path: record.id.uuidString + ".json")
-        if files.fileExists(atPath: url.path) {
-            _ = try read(url, id: record.id.uuidString)
-            try Data(contentsOf: url).write(to: url.appendingPathExtension("backup"), options: .atomic)
+        if let current = stamp(url) {
+            // Never let a damaged or foreign primary replace the last good backup.
+            if known[record.id] != current {
+                verificationReads += 1
+                _ = try read(url, id: record.id.uuidString)
+            }
+            try backUp(url)
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
+        // The atomic write replaces the primary with a new file; a backup linked to
+        // the old file keeps the previous version.
         try encoder.encode(record).write(to: url, options: .atomic)
+        known[record.id] = stamp(url)
+    }
+
+    /// Make `.backup` the current primary's content. A hard link moved over the old backup
+    /// avoids copying the note; the primary exists throughout. Falls back to a copy.
+    private func backUp(_ primary: URL) throws {
+        let backup = primary.appendingPathExtension("backup")
+        let link = root.appending(path: "." + primary.lastPathComponent + "." + UUID().uuidString)
+        do {
+            try files.linkItem(at: primary, to: link)
+            guard Darwin.rename(link.path, backup.path) == 0 else {
+                let code = errno
+                try? files.removeItem(at: link)
+                throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
+            }
+        } catch {
+            try Data(contentsOf: primary).write(to: backup, options: .atomic)
+        }
     }
 }
