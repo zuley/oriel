@@ -14,8 +14,18 @@ final class AppModel: ObservableObject {
     private var nextWindowNumber = 1
     private var management: ManagementWindow?
     private var terminationObserver: NSObjectProtocol?
+    private var editingMonitor: Any?
 
     init() {
+        // Text fields in mini windows and their sheets get ⌘A/C/X/V/Z even while another
+        // app is active, when the Edit menu does not see them (see EditingShortcuts).
+        editingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let handled = MainActor.assumeIsolated {
+                guard let action = EditingShortcuts.action(for: event, responder: event.window?.firstResponder) else { return false }
+                return NSApp.sendAction(action, to: nil, from: nil)
+            }
+            return handled ? nil : event
+        }
         NotesWorkspace.shared.onSaveBlocked = { [weak self] documentIDs in
             guard let self else { return }
             if let note = NotesWorkspace.shared.list().first(where: {
