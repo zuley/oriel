@@ -388,7 +388,12 @@ final class NotesTextView: NSTextView {
         super.viewDidMoveToWindow()
         guard window != nil else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, let window = self.window, !window.ignoresMouseEvents else { return }
+            guard let self, let window = self.window, !window.ignoresMouseEvents,
+                  !self.isHiddenOrHasHiddenAncestor else { return }
+            // Page activation may already have restored the system find input.
+            // Do not let this deferred mount request move typing back into the note.
+            if let bar = self.enclosingScrollView?.findBarView,
+               let input = window.firstResponder as? NSView, input.isDescendant(of: bar) { return }
             window.makeFirstResponder(self)
         }
     }

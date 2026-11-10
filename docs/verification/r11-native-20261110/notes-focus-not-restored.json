@@ -1,0 +1,76 @@
+{
+  "id": "aa62d3b1-8d4a-490a-856f-303effa21677",
+  "ok": true,
+  "result": {
+    "action": {
+      "delivery": "background",
+      "path": "synthetic",
+      "actionName": "pressKey",
+      "verification": {
+        "reason": "synthetic_input",
+        "state": "unverified",
+        "actualPreview": null,
+        "expected": null
+      },
+      "targetWindowId": 62660,
+      "fallbackReason": null
+    },
+    "screenshot": {
+      "format": "png",
+      "scale": 1,
+      "height": 360,
+      "width": 280,
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/aa62d3b1-8d4a-490a-856f-303effa21677-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T08:18:37.110Z"
+    },
+    "screenshotStatus": {
+      "metadata": {
+        "windowId": 62660,
+        "engine": "screenCaptureKit"
+      },
+      "state": "captured"
+    },
+    "snapshot": {
+      "coordinateSpace": "window",
+      "window": {
+        "width": 280,
+        "title": "Oriel · 小窗",
+        "isMinimized": false,
+        "isOffscreen": false,
+        "x": 1616,
+        "y": 54,
+        "screenIndex": 0,
+        "platform": {
+          "layer": 25
+        },
+        "height": 360,
+        "id": 62660
+      },
+      "id": "247ADB58-3676-48FC-9CF0-90920FC72FB2",
+      "treeText": "App=app.oriel.r11qa.20261110 (pid 21182)\nWindow: \"Oriel · 小窗\", App: Oriel.\n\nNo change in the accessibility tree since the previous snapshot.\n\nThe focused UI element is 0 system dialog Oriel · 小窗.",
+      "elementCount": 17,
+      "truncation": {
+        "maxDepthReached": false,
+        "truncated": false,
+        "maxNodes": 1200,
+        "maxDepth": 64
+      },
+      "app": {
+        "name": "Oriel",
+        "bundleId": "app.oriel.r11qa.20261110",
+        "pid": 21182
+      },
+      "focusedElementId": 0,
+      "treeDiff": {
+        "baseSnapshotId": "5B5E9216-173F-44D8-A7D8-A58EF72715F2",
+        "changed": 0,
+        "added": 0,
+        "removed": 0
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "3f229e3d-3814-408b-9d0b-439be970fe5a"
+  }
+}

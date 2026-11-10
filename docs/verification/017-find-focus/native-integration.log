@@ -1,0 +1,27 @@
+BEFORE responder=Optional(<NSFindPatternFieldEditor: 0x990734c00>
+    Frame = {{27.00, 3.00}, {46.00, 14.00}}, Bounds = {{0.00, 0.00}, {46.00, 14.00}}
+    Horizontally resizable: YES, Vertically resizable: YES
+    MinSize = {46.00, 14.00}, MaxSize = {40000.00, 40000.00}
+) query=alpha
+HOME RETURN responder=Optional(<NSFindPatternFieldEditor: 0x990734c00>
+    Frame = {{27.00, 3.00}, {35.00, 14.00}}, Bounds = {{0.00, 0.00}, {35.00, 14.00}}
+    Horizontally resizable: YES, Vertically resizable: YES
+    MinSize = {35.00, 14.00}, MaxSize = {40000.00, 40000.00}
+) currentField=Optional(<NSFindPatternFieldEditor: 0x990734c00>
+    Frame = {{27.00, 3.00}, {35.00, 14.00}}, Bounds = {{0.00, 0.00}, {35.00, 14.00}}
+    Horizontally resizable: YES, Vertically resizable: YES
+    MinSize = {35.00, 14.00}, MaxSize = {40000.00, 40000.00}
+)
+HOME PASS query=alphax body unchanged
+CONTENT RETURN responder=Optional(<NSFindPatternFieldEditor: 0x990734c00>
+    Frame = {{27.00, 3.00}, {35.00, 14.00}}, Bounds = {{0.00, 0.00}, {35.00, 14.00}}
+    Horizontally resizable: YES, Vertically resizable: YES
+    MinSize = {35.00, 14.00}, MaxSize = {40000.00, 40000.00}
+) currentField=Optional(<NSFindPatternFieldEditor: 0x990734c00>
+    Frame = {{27.00, 3.00}, {35.00, 14.00}}, Bounds = {{0.00, 0.00}, {35.00, 14.00}}
+    Horizontally resizable: YES, Vertically resizable: YES
+    MinSize = {35.00, 14.00}, MaxSize = {40000.00, 40000.00}
+)
+CONTENT PASS query=alphaxy body unchanged
+SCREENSHOT exit=0
+PASS: real MiniPanel home + content remount, real key events, body unchanged

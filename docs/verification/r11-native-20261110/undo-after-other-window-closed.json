@@ -1,0 +1,70 @@
+{
+  "id": "6f137582-9e36-4f67-8f8b-529775b12555",
+  "ok": true,
+  "result": {
+    "screenshot": {
+      "width": 280,
+      "format": "png",
+      "height": 360,
+      "scale": 1,
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/6f137582-9e36-4f67-8f8b-529775b12555-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T08:26:58.620Z"
+    },
+    "action": {
+      "delivery": "background",
+      "path": "synthetic",
+      "actionName": "hotkey",
+      "verification": {
+        "actualPreview": null,
+        "state": "unverified",
+        "reason": "synthetic_input",
+        "expected": null
+      },
+      "targetWindowId": 62660,
+      "fallbackReason": null
+    },
+    "screenshotStatus": {
+      "metadata": {
+        "windowId": 62660,
+        "engine": "screenCaptureKit"
+      },
+      "state": "captured"
+    },
+    "snapshot": {
+      "elementCount": 15,
+      "id": "F537244E-45B2-4727-9DEE-7F260F08C980",
+      "treeText": "App=app.oriel.r11qa.20261110 (pid 21182)\nWindow: \"Oriel · 小窗\", App: Oriel.\n\n0 system dialog Oriel · 小窗\n\t1 button 关闭小窗\n\t2 button 收起到菜单栏\n\t3 button 新建页签\n\t4 button 收起为横条, Value: 0\n\t5 button 开启边缘唤醒, Value: 边缘唤醒已关闭\n\t6 button 窗口设置\n\t7 button 锁定穿透, Value: 0\n\t8 text 窗口名称 小窗\n\t9 button\n\t10 text R11验收便签A：保留正文，切回追加，故障期间未保存\n\t11 button\n\t12 menu button 便签操作\n\t13 scroll area, Secondary Actions: scroll up, scroll down\n\t\t14 text entry area (settable) 便签正文 R11验收便签A：保留正文，切回追加，故障期间未保存\n\nThe focused UI element is 14 text entry area (settable) 便签正文 R11验收便签A：保留正文，切回追加，故障期间未保存.",
+      "window": {
+        "width": 280,
+        "title": "Oriel · 小窗",
+        "isMinimized": false,
+        "isOffscreen": false,
+        "x": 1538,
+        "y": 831,
+        "screenIndex": 0,
+        "platform": {
+          "layer": 25
+        },
+        "height": 360,
+        "id": 62660
+      },
+      "truncation": {
+        "maxDepthReached": false,
+        "truncated": false,
+        "maxNodes": 1200,
+        "maxDepth": 64
+      },
+      "coordinateSpace": "window",
+      "app": {
+        "name": "Oriel",
+        "bundleId": "app.oriel.r11qa.20261110",
+        "pid": 21182
+      },
+      "focusedElementId": 14
+    }
+  },
+  "_meta": {
+    "runtimeId": "3f229e3d-3814-408b-9d0b-439be970fe5a"
+  }
+}

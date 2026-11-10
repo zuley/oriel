@@ -1,0 +1,70 @@
+{
+  "id": "b5baf251-47c3-4748-a48d-ae2da87e55b0",
+  "ok": true,
+  "result": {
+    "action": {
+      "fallbackReason": null,
+      "targetWindowId": 62660,
+      "actionName": "hotkey",
+      "verification": {
+        "state": "unverified",
+        "actualPreview": null,
+        "reason": "synthetic_input",
+        "expected": null
+      },
+      "path": "synthetic",
+      "delivery": "background"
+    },
+    "screenshotStatus": {
+      "metadata": {
+        "windowId": 62660,
+        "engine": "screenCaptureKit"
+      },
+      "state": "captured"
+    },
+    "snapshot": {
+      "elementCount": 17,
+      "app": {
+        "name": "Oriel",
+        "bundleId": "app.oriel.r11qa.20261110",
+        "pid": 21182
+      },
+      "truncation": {
+        "maxDepth": 64,
+        "truncated": false,
+        "maxNodes": 1200,
+        "maxDepthReached": false
+      },
+      "window": {
+        "id": 62660,
+        "y": 54,
+        "height": 360,
+        "isOffscreen": false,
+        "title": "Oriel · 小窗",
+        "isMinimized": false,
+        "x": 1616,
+        "platform": {
+          "layer": 25
+        },
+        "screenIndex": 0,
+        "width": 280
+      },
+      "focusedElementId": 55,
+      "id": "17918489-BA2A-4FF2-91BF-DDD430363733",
+      "coordinateSpace": "window",
+      "treeText": "App=app.oriel.r11qa.20261110 (pid 21182)\nWindow: \"Oriel · 小窗\", App: Oriel.\n\n0 system dialog Oriel · 小窗\n\t1 button 关闭小窗\n\t2 button 收起到菜单栏\n\t3 button 新建页签\n\t4 button 收起为横条, Value: 0\n\t5 button 开启边缘唤醒, Value: 边缘唤醒已关闭\n\t6 button 窗口设置\n\t7 button 锁定穿透, Value: 0\n\t8 text 窗口名称 小窗\n\t52 scroll bar (disabled) 0\n\t53 button ~, Value: 1\n\t54 button ~, Value: 0\n\t55 sheet alert\n\t\t56 text 终端中有任务正在运行\n\t\t57 text 终端页签「~」中有任务正在运行，关闭会结束它。\n\t\t58 button 取消\n\t\t59 button 结束并关闭\n\nThe focused UI element is 55 sheet alert."
+    },
+    "screenshot": {
+      "format": "png",
+      "width": 280,
+      "height": 360,
+      "scale": 1,
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/b5baf251-47c3-4748-a48d-ae2da87e55b0-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T08:12:27.132Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3f229e3d-3814-408b-9d0b-439be970fe5a"
+  }
+}

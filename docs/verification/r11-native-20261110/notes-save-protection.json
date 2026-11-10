@@ -1,0 +1,57 @@
+{
+  "id": "78a4ad01-7877-4e20-ab6b-2542a4851b6b",
+  "ok": true,
+  "result": {
+    "screenshotStatus": {
+      "state": "captured",
+      "metadata": {
+        "windowId": 62707,
+        "engine": "screenCaptureKit"
+      }
+    },
+    "snapshot": {
+      "truncation": {
+        "maxDepthReached": false,
+        "truncated": false,
+        "maxNodes": 1200,
+        "maxDepth": 64
+      },
+      "elementCount": 6,
+      "app": {
+        "pid": 21182,
+        "name": "Oriel",
+        "bundleId": "app.oriel.r11qa.20261110"
+      },
+      "window": {
+        "width": 260,
+        "title": "",
+        "isMinimized": false,
+        "isOffscreen": false,
+        "x": 830,
+        "y": 213,
+        "screenIndex": 0,
+        "platform": {
+          "layer": 8
+        },
+        "height": 321,
+        "id": 62707
+      },
+      "focusedElementId": 0,
+      "treeText": "App=app.oriel.r11qa.20261110 (pid 21182)\nWindow: \"\", App: Oriel.\n\n0 dialog alert\n\t1 image Oriel alert\n\t2 text 便签尚未保存\n\t3 text 文字仍在小窗中。可以保留窗口后复制或导出，也可以修复磁盘问题后重试。  The file “3F4010C1-2262-41BE-B994-2F22C08A3435.json.backup” couldn’t be saved in the folder “Notes”.\n\t4 button 重试保存\n\t5 button 保留窗口\n\nThe focused UI element is 0 dialog alert.",
+      "id": "3DE8AA49-142D-4296-87EA-15420E8D6821",
+      "coordinateSpace": "window"
+    },
+    "screenshot": {
+      "width": 260,
+      "format": "png",
+      "height": 321,
+      "scale": 1,
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/78a4ad01-7877-4e20-ab6b-2542a4851b6b-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T08:19:55.703Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3f229e3d-3814-408b-9d0b-439be970fe5a"
+  }
+}

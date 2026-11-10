@@ -1,0 +1,57 @@
+{
+  "id": "df3a291e-66cc-408f-9e0e-e671164d45f9",
+  "ok": true,
+  "result": {
+    "screenshotStatus": {
+      "metadata": {
+        "windowId": 62660,
+        "engine": "screenCaptureKit"
+      },
+      "state": "captured"
+    },
+    "snapshot": {
+      "treeText": "App=app.oriel.r11qa.20261110 (pid 21182)\nWindow: \"Oriel · 小窗\", App: Oriel.\n\n0 system dialog Oriel · 小窗\n\t1 button 关闭小窗\n\t2 button 收起到菜单栏\n\t3 button 新建页签\n\t4 button 收起为横条, Value: 0\n\t5 button 开启边缘唤醒, Value: 边缘唤醒已关闭\n\t6 button 窗口设置\n\t7 button 锁定穿透, Value: 0\n\t8 text 窗口名称 小窗\n\t152 button 终端\n\t153 button 小说\n\t154 button 自选股\n\t155 button 便签\n\t156 button 浏览器\n\t157 text 选择要打开的内容\n\nThe focused UI element is 0 system dialog Oriel · 小窗.",
+      "coordinateSpace": "window",
+      "elementCount": 15,
+      "truncation": {
+        "maxDepthReached": false,
+        "truncated": false,
+        "maxNodes": 1200,
+        "maxDepth": 64
+      },
+      "window": {
+        "title": "Oriel · 小窗",
+        "id": 62660,
+        "x": 1538,
+        "y": 831,
+        "height": 360,
+        "isMinimized": false,
+        "screenIndex": 0,
+        "width": 280,
+        "isOffscreen": false,
+        "platform": {
+          "layer": 25
+        }
+      },
+      "app": {
+        "name": "Oriel",
+        "bundleId": "app.oriel.r11qa.20261110",
+        "pid": 21182
+      },
+      "focusedElementId": 0,
+      "id": "AF82F89C-7EA6-41DC-A9BC-7D41D69ACD24"
+    },
+    "screenshot": {
+      "width": 280,
+      "scale": 1,
+      "format": "png",
+      "height": 360,
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/df3a291e-66cc-408f-9e0e-e671164d45f9-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T08:23:41.989Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3f229e3d-3814-408b-9d0b-439be970fe5a"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "id": "41247823-23f8-4330-8110-6e5aaa74cf8d",
+  "ok": true,
+  "result": {
+    "snapshot": {
+      "truncation": {
+        "maxDepthReached": false,
+        "truncated": false,
+        "maxNodes": 1200,
+        "maxDepth": 64
+      },
+      "elementCount": 12,
+      "app": {
+        "name": "Oriel",
+        "bundleId": "app.oriel.r11focus.20261110",
+        "pid": 31603
+      },
+      "window": {
+        "id": 62811,
+        "y": 54,
+        "height": 90,
+        "isOffscreen": false,
+        "title": "Oriel · 小窗",
+        "isMinimized": false,
+        "x": 1776,
+        "platform": {
+          "layer": 25
+        },
+        "screenIndex": 0,
+        "width": 120
+      },
+      "focusedElementId": 24,
+      "treeText": "App=app.oriel.r11focus.20261110 (pid 31603)\nWindow: \"Oriel · 小窗\", App: Oriel.\n\n0 system dialog Oriel · 小窗\n\t1 button 关闭小窗\n\t2 button 收起到菜单栏\n\t3 button 新建页签\n\t4 button 收起为横条, Value: 0\n\t5 button 窗口设置\n\t6 button 锁定穿透, Value: 0\n\t22 menu button 便签菜单\n\t23 scroll area, Secondary Actions: scroll up, scroll down\n\t\t24 text entry area (settable) 便签正文 abcdef\n\t25 button abcdef, Value: 1\n\t21 button 全部页签\n\nThe focused UI element is 24 text entry area (settable) 便签正文 abcdef.",
+      "id": "A3E03A7F-9DEA-4FD2-95D6-184E10E51FE4",
+      "coordinateSpace": "window"
+    },
+    "action": {
+      "fallbackReason": null,
+      "targetWindowId": 62811,
+      "path": "synthetic",
+      "delivery": "background",
+      "actionName": "hotkey",
+      "verification": {
+        "state": "unverified",
+        "reason": "synthetic_input",
+        "expected": null,
+        "actualPreview": null
+      }
+    },
+    "screenshotStatus": {
+      "metadata": {
+        "windowId": 62811,
+        "engine": "screenCaptureKit"
+      },
+      "state": "captured"
+    },
+    "screenshot": {
+      "width": 120,
+      "format": "png",
+      "height": 90,
+      "scale": 1,
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/41247823-23f8-4330-8110-6e5aaa74cf8d-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T08:53:56.683Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3f229e3d-3814-408b-9d0b-439be970fe5a"
+  }
+}

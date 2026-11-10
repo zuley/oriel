@@ -1,0 +1,70 @@
+{
+  "id": "74919786-4fd7-4442-8d68-d69f3b7b4ff7",
+  "ok": true,
+  "result": {
+    "action": {
+      "targetWindowId": 62789,
+      "delivery": "background",
+      "path": "synthetic",
+      "verification": {
+        "reason": "synthetic_input",
+        "state": "unverified",
+        "actualPreview": null,
+        "expected": null
+      },
+      "fallbackReason": null,
+      "actionName": "hotkey"
+    },
+    "screenshotStatus": {
+      "metadata": {
+        "windowId": 62789,
+        "engine": "screenCaptureKit"
+      },
+      "state": "captured"
+    },
+    "snapshot": {
+      "elementCount": 21,
+      "id": "221514C4-5F16-46DD-AC1F-BAF1D5F76FFB",
+      "treeText": "App=app.oriel.r11focus.20261110 (pid 30535)\nWindow: \"Oriel · 小窗\", App: Oriel.\n\n0 system dialog Oriel · 小窗\n\t1 button 关闭小窗\n\t2 button 收起到菜单栏\n\t3 button 新建页签\n\t4 button 收起为横条, Value: 0\n\t5 button 开启边缘唤醒, Value: 边缘唤醒已关闭\n\t6 button 窗口设置\n\t7 button 锁定穿透, Value: 0\n\t8 text 窗口名称 小窗\n\t55 button\n\t56 text 便签\n\t57 button\n\t58 menu button 便签操作\n\t59 image\n\t60 text field (settable) 搜索便签, Value: abc\n\t61 button\n\t62 scroll area, Secondary Actions: scroll up, scroll down\n\t\t63 list, Secondary Actions: scroll to top, scroll to bottom\n\t\t\t64 button\n\t65 button abcdef, Value: 1\n\t66 button 首页, Value: 0\n\nThe focused UI element is 60 text field (settable) 搜索便签, Value: abc.",
+      "window": {
+        "width": 280,
+        "title": "Oriel · 小窗",
+        "isMinimized": false,
+        "isOffscreen": false,
+        "x": 1616,
+        "y": 54,
+        "screenIndex": 0,
+        "platform": {
+          "layer": 25
+        },
+        "height": 360,
+        "id": 62789
+      },
+      "truncation": {
+        "maxDepthReached": false,
+        "maxDepth": 64,
+        "maxNodes": 1200,
+        "truncated": false
+      },
+      "coordinateSpace": "window",
+      "app": {
+        "name": "Oriel",
+        "bundleId": "app.oriel.r11focus.20261110",
+        "pid": 30535
+      },
+      "focusedElementId": 60
+    },
+    "screenshot": {
+      "width": 280,
+      "scale": 1,
+      "format": "png",
+      "height": 360,
+      "path": "/var/folders/wm/0c7nxd913gg54qwbqgdyw07m0000gn/T/orca-computer-use/74919786-4fd7-4442-8d68-d69f3b7b4ff7-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-11-11T08:50:54.248Z"
+    }
+  },
+  "_meta": {
+    "runtimeId": "3f229e3d-3814-408b-9d0b-439be970fe5a"
+  }
+}

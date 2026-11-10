@@ -8,6 +8,9 @@ final class NotesPage: TabPage {
     let view: NSView
     let session: NotesSession
     private weak var host: PageHost?
+    // Remember the control, not AppKit's field editor, which other tabs can reuse.
+    private weak var findInputToRestore: NSTextField?
+    private var findInputSelection: NSRange?
     var title: String { session.document.title }
     var noteID: UUID { session.document.id }
 
@@ -30,6 +33,29 @@ final class NotesPage: TabPage {
         page = self
     }
 
+    func didActivate() {
+        guard let host, host.canManageTabs, host.isPresenting(self),
+              host.hostWindow.attachedSheet == nil else { return }
+        if session.showingList {
+            session.focusSearch?()
+        } else if let scroll = session.document.editorView, let editor = scroll.documentView,
+                  editor.window === host.hostWindow, !editor.isHiddenOrHasHiddenAncestor {
+            if scroll.isFindBarVisible, let bar = scroll.findBarView,
+               let field = findInputToRestore, field.isDescendant(of: bar),
+               field.window === host.hostWindow, !field.isHiddenOrHasHiddenAncestor,
+               host.hostWindow.makeFirstResponder(field) {
+                if let selection = findInputSelection, let input = field.currentEditor() as? NSTextView {
+                    let length = (input.string as NSString).length
+                    let start = min(selection.location, length)
+                    input.setSelectedRange(NSRange(location: start, length: min(selection.length, length - start)))
+                }
+                return
+            }
+            // Cached editors do not move to a window again when returning from home.
+            host.hostWindow.makeFirstResponder(editor)
+        }
+    }
+
     /// Show `document` in this tab.
     func show(_ document: NoteDocument) { session.select(document) }
 
@@ -40,7 +66,22 @@ final class NotesPage: TabPage {
     }
 
     func willDeactivate() { commitEditing() }
-    func commitEditing() { session.document.commitEditing?() }
+    func commitEditing() {
+        // MiniPanel commits before clearing focus, including when reselecting this tab.
+        findInputToRestore = nil
+        findInputSelection = nil
+        if let scroll = session.document.editorView, scroll.isFindBarVisible,
+           let bar = scroll.findBarView,
+           let input = host?.hostWindow.firstResponder as? NSTextView, input.isFieldEditor {
+            func focusedField(in view: NSView) -> NSTextField? {
+                if let field = view as? NSTextField, field.currentEditor() === input { return field }
+                return view.subviews.lazy.compactMap { focusedField(in: $0) }.first
+            }
+            findInputToRestore = focusedField(in: bar)
+            if findInputToRestore != nil { findInputSelection = input.selectedRange() }
+        }
+        session.document.commitEditing?()
+    }
 
     func windowWillConceal() {
         commitEditing()
