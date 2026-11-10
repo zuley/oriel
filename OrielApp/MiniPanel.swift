@@ -1,9 +1,7 @@
 import AppKit
-import SwiftUI
 import Combine
 import OrielCore
 import OrielReading
-import OrielTerminal
 
 @MainActor
 final class MiniPanel: NSPanel, NSWindowDelegate {
@@ -23,46 +21,22 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         var transparencyRecoveryChanged: (Bool) -> Void = { _ in }
     }
 
-    fileprivate enum GeometryInteraction: Equatable {
+    enum GeometryInteraction: Equatable {
         case dragging
         case resizing
     }
 
-    fileprivate let actions: Actions
-    private var chrome: MiniWindowChromeView!
-    private let pages: PageFactory
-    private var currentState: WindowSnapshot?
-    @MainActor
-    fileprivate final class Tab {
-        let number: Int
-        /// nil means the new-tab (home) page.
-        var page: PageKind?
-        /// The page `goBack` came from, still offered by `goForward`.
-        var forwardPage: PageKind?
-        /// Every page this tab opened, kept so returning to one resumes it.
-        var pages: [PageKind: TabPage] = [:]
-
-        init(number: Int) { self.number = number }
-
-        var current: TabPage? { page.flatMap { pages[$0] } }
-        var title: String { current?.title ?? "首页" }
-        var notes: NotesPage? { pages[.notes] as? NotesPage }
-        var terminal: TerminalPage? { pages[.terminal] as? TerminalPage }
-
-        func dispose() {
-            for page in pages.values { page.dispose() }
-            pages.removeAll()
-        }
-    }
-
-    fileprivate var tabs: [Tab]
-    fileprivate var selected: Tab
+    let actions: Actions
+    private(set) var chrome: MiniWindowChromeView!
+    let pages: PageFactory
+    private(set) var currentState: WindowSnapshot?
+    let windowTabs = WindowTabs()
+    var selected: WindowTab { windowTabs.selected }
     /// The page on screen; told when it leaves.
-    fileprivate var presented: TabPage?
-    private var nextTabNumber = 2
-    private var noteChanges: AnyCancellable?
-    private var noteRefreshPending = false
-    fileprivate var geometryInteraction: GeometryInteraction?
+    var presented: TabPage?
+    var noteChanges: AnyCancellable?
+    var noteRefreshPending = false
+    private(set) var geometryInteraction: GeometryInteraction?
     private var resizeStart: (frame: NSRect, pointer: NSPoint)?
     private var dragCompletionTimer: Timer?
     weak var hoveredResizeHandle: PanelResizeHandle?
@@ -73,7 +47,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private var contentOpacity: Double = 0.75
     private var revealingToolbar = false
     private var trackingMenus = Set<ObjectIdentifier>()
-    fileprivate var isDisposed = false
+    private(set) var isDisposed = false
     private var applyingPresentationFrame = false
     private var expandedMinimumHeight: CGFloat = 90
 
@@ -110,9 +84,6 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         pages = PageFactory(library: library, watchlist: watchlist, notes: NotesWorkspace.shared)
         self.backgroundOpacity = preferences.backgroundOpacity
         self.contentOpacity = preferences.contentOpacity
-        let first = Tab(number: 1)
-        selected = first
-        tabs = [first]
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel, .resizable],
                    backing: .buffered, defer: false)
         title = "Oriel 迷你窗"
@@ -178,16 +149,16 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         if let menu = notification.object as? NSMenu { trackingMenus.remove(ObjectIdentifier(menu)) }
     }
 
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        handleTabKeyEquivalent(event) || super.performKeyEquivalent(with: event)
+    }
+
     override var canBecomeKey: Bool { !ignoresMouseEvents }
     override var canBecomeMain: Bool { false }
 
     func setWindowName(_ name: String) {
         title = "Oriel · \(name)"
         chrome.setWindowName(name)
-    }
-
-    func confirmCanClose() -> Bool {
-        NotesWorkspace.shared.confirmCanClose(documentIDs: Set(tabs.compactMap { $0.notes?.noteID }))
     }
 
     func cancelGeometryInteraction() {
@@ -263,8 +234,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         hideLockRecovery()
         lockRecoveryPanel?.close()
         lockRecoveryPanel = nil
-        for tab in tabs { tab.dispose() }
-        tabs.removeAll()
+        windowTabs.dispose()
         contentView = nil
         chrome = nil
         orderOut(nil)
@@ -366,7 +336,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         if notify { actions.geometryInteractionChanged(false) }
     }
 
-    fileprivate func updateToolbar() {
+    func updateToolbar() {
         chrome?.update(
             isLocked: currentState?.isLocked ?? false,
             automaticHiding: currentState?.automaticHiding ?? false,
@@ -407,32 +377,6 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         if recovery.parent != nil { removeChildWindow(recovery) }
     }
 
-    fileprivate func refreshTabs() {
-        guard !isDisposed else { return }
-        if !tabs.contains(where: { $0.notes != nil }) { noteChanges = nil }
-        chrome.setTabs(tabs.map { ChromeTab(number: $0.number, title: $0.title, kind: $0.page) },
-                       selected: selected.number)
-    }
-
-    /// Every return to the launcher shows the page tiles.
-    fileprivate func showHome() {
-        chrome.showHome()
-    }
-
-    private func observeNoteTitles() {
-        guard noteChanges == nil else { return }
-        noteChanges = NotesWorkspace.shared.objectWillChange.sink { [weak self] in
-            guard let self, !isDisposed, !noteRefreshPending else { return }
-            noteRefreshPending = true
-            // One refresh per window/run-loop turn, after published records are updated.
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                noteRefreshPending = false
-                refreshTabs()
-            }
-        }
-    }
-
     func applyDefaults(_ preferences: AppPreferences) {
         guard !isDisposed else { return }
         cancelGeometryInteraction()
@@ -449,202 +393,6 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                                 width: width, height: height)
             actions.frameChanged(target.insetBy(dx: 4, dy: 4))
         }
-    }
-
-    var canManageTabs: Bool {
-        !isDisposed && isVisible && currentState?.isLocked == false
-    }
-
-    private func addTab() {
-        guard canManageTabs else { return }
-        let tab = Tab(number: nextTabNumber)
-        nextTabNumber += 1
-        tabs.append(tab)
-        activate(tab)
-    }
-
-    private func selectTab(number: Int) {
-        guard canManageTabs, let tab = tabs.first(where: { $0.number == number }) else { return }
-        activate(tab)
-    }
-
-    /// Titles of terminal tabs whose shell is running a command.
-    var busyTerminalTitles: [String] {
-        CloseGuard.busyTitles(tabs.compactMap { tab in
-            tab.terminal.map { CloseGuard.Terminal(title: $0.title, busy: $0.isBusy) }
-        })
-    }
-
-    /// Ask before ending running commands. `proceed` runs only after confirmation.
-    func confirmEndingJobs(_ message: String, button: String, proceed: @escaping () -> Void) {
-        guard !isDisposed, attachedSheet == nil else { return }
-        let alert = NSAlert()
-        alert.messageText = "终端中有任务正在运行"
-        alert.informativeText = message
-        alert.addButton(withTitle: button)
-        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
-        makeKeyAndOrderFront(nil)
-        alert.beginSheetModal(for: self) { response in
-            if response == .alertFirstButtonReturn { proceed() }
-        }
-    }
-
-    private func closeTab(number: Int) {
-        guard canManageTabs, let tab = tabs.first(where: { $0.number == number }) else { return }
-        if let terminal = tab.terminal, terminal.isBusy,
-           let message = CloseGuard.message(busy: [terminal.title]) {
-            confirmEndingJobs(message, button: "结束并关闭") { [weak self, weak tab] in
-                guard let self, let tab, self.canManageTabs else { return }
-                self.performCloseTab(number: tab.number)
-            }
-            return
-        }
-        performCloseTab(number: number)
-    }
-
-    private func performCloseTab(number: Int) {
-        guard canManageTabs, let index = tabs.firstIndex(where: { $0.number == number }) else { return }
-        let noteIDs = Set([tabs[index].notes?.noteID].compactMap { $0 })
-        guard NotesWorkspace.shared.confirmCanClose(documentIDs: noteIDs) else { return }
-        let closed = tabs.remove(at: index)
-        let wasSelected = closed === selected
-        if wasSelected {
-            makeFirstResponder(nil)
-            presented = nil
-        }
-        closed.dispose()
-        guard wasSelected else {
-            refreshTabs()
-            return
-        }
-        if tabs.isEmpty {
-            addTab()
-        } else {
-            activate(tabs[min(index, tabs.count - 1)])
-        }
-    }
-
-    private func activate(_ tab: Tab) {
-        let page = tab.current
-        presented?.commitEditing()
-        if let presented, presented !== page { presented.willDeactivate() }
-        try? NotesWorkspace.shared.saveAll()
-        makeFirstResponder(nil)
-        selected = tab
-        presented = page
-        if let page {
-            switch page.surface {
-            case .terminal: chrome.showTerminal(page.view)
-            case .reading: chrome.showReadingSurface(page.view)
-            }
-            makeKeyAndOrderFront(nil)
-            page.didActivate()
-            page.windowVisibilityChanged(currentState?.isVisible == true)
-        } else {
-            showHome()
-        }
-        if tab.notes != nil { observeNoteTitles() }
-        refreshTabs()
-        updateToolbar()
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard canManageTabs, isKeyWindow, attachedSheet == nil else { return super.performKeyEquivalent(with: event) }
-        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        let key = event.charactersIgnoringModifiers?.lowercased()
-        if tabs.count > 1, let index = tabs.firstIndex(where: { $0 === selected }) {
-            if modifiers == .command, let key, let digit = Int(key), (1...9).contains(digit) {
-                let target = digit == 9 ? tabs.count - 1 : digit - 1
-                if tabs.indices.contains(target) { activate(tabs[target]); return true }
-            }
-            let step: Int
-            switch (modifiers, key) {
-            case (.control, _) where event.keyCode == 48: step = 1
-            case ([.control, .shift], _) where event.keyCode == 48: step = -1
-            case ([.command, .shift], "]"), ([.command, .shift], "}"): step = 1
-            case ([.command, .shift], "["), ([.command, .shift], "{"): step = -1
-            default: step = 0
-            }
-            if step != 0 { activate(tabs[(index + step + tabs.count) % tabs.count]); return true }
-        }
-        if let page = selected.current, page.handleKeyEquivalent(key, modifiers: modifiers, event: event) {
-            return true
-        }
-        if modifiers == .command {
-            switch key {
-            case "t": addTab(); return true
-            case "w": closeTab(number: selected.number); return true
-            case "[" where selected.page != nil: goBack(); return true
-            case "]" where selected.forwardPage != nil || selected.current?.handlesForward == true:
-                goForward(); return true
-            default: break
-            }
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    private func goBack() {
-        if let page = selected.current, page.canGoBackWithin {
-            page.goBackWithin()
-            return
-        }
-        selected.forwardPage = selected.page
-        if let page = selected.current, page.isFinished {
-            // An exited shell has nothing to resume; the next visit starts a new one.
-            selected.pages[page.kind] = nil
-            if presented === page { presented = nil }
-            page.dispose()
-            selected.forwardPage = nil
-        }
-        selected.page = nil
-        activate(selected)
-    }
-
-    private func goForward() {
-        if let page = selected.current, page.handlesForward {
-            page.goForwardWithin()
-            return
-        }
-        guard selected.page == nil, let target = selected.forwardPage else { return }
-        openPage(target)
-    }
-
-    func containsNote(_ id: UUID) -> Bool { tabs.contains { $0.notes?.noteID == id } }
-
-    func revealNote(_ id: UUID) {
-        guard canManageTabs, let tab = tabs.first(where: { $0.notes?.noteID == id }) else { return }
-        showNotes(in: tab)
-    }
-
-    func revealUnsavedNote() {
-        guard canManageTabs,
-              let document = NotesWorkspace.shared.list().first(where: { $0.isDirty && $0.errorMessage != nil }) else { return }
-        if let existing = tabs.first(where: { $0.notes?.noteID == document.id }) {
-            showNotes(in: existing)
-        } else {
-            addTab()
-            openPage(.notes)
-            if let page = selected.notes { openNote(document, from: page) }
-        }
-    }
-
-    /// Bring a tab's notes page to the front with its editor focused.
-    fileprivate func showNotes(in tab: Tab) {
-        tab.notes?.session.showingList = false
-        tab.page = .notes
-        activate(tab)
-        tab.notes?.reveal()
-    }
-
-    private func openPage(_ kind: PageKind) {
-        guard canManageTabs else { return }
-        let tab = selected
-        let existing = tab.pages[kind]
-        let page = existing ?? pages.make(kind, host: self, frame: chrome.bounds)
-        tab.pages[kind] = page
-        tab.page = kind
-        activate(tab)
-        if existing == nil { page.didOpen() }
     }
 
     func setEmphasis(_ emphasis: WindowGroupController.Emphasis) {
@@ -698,46 +446,4 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         settingsPanel.show(below: sender)
     }
 
-}
-
-extension MiniPanel: PageHost {
-    var hostWindow: NSPanel { self }
-    var isGeometryInteracting: Bool { geometryInteraction != nil }
-
-    func isPresenting(_ page: TabPage) -> Bool { !isDisposed && presented === page }
-
-    func pageTitleChanged(_ page: TabPage) {
-        guard !isDisposed else { return }
-        refreshTabs()
-    }
-
-    func pageFinished(_ page: TabPage) {
-        guard !isDisposed, let tab = tabs.first(where: { $0.pages[page.kind] === page }) else { return }
-        tab.pages[page.kind] = nil
-        if tab.forwardPage == page.kind { tab.forwardPage = nil }
-        if tab.page == page.kind {
-            tab.page = nil
-            if selected === tab {
-                presented = nil
-                makeFirstResponder(nil)
-                showHome()
-            }
-        }
-        if selected === tab { updateToolbar() }
-        refreshTabs()
-    }
-
-    func openNote(_ document: NoteDocument, from page: NotesPage) {
-        if actions.focusNoteElsewhere(document.id) { return }
-        if let existing = tabs.first(where: { $0.notes !== page && $0.notes?.noteID == document.id }) {
-            showNotes(in: existing)
-        } else {
-            page.show(document)
-            refreshTabs()
-        }
-    }
-
-    func noteIsOpenElsewhere(_ id: UUID) -> Bool {
-        tabs.contains { $0.notes?.noteID == id } || actions.noteIsOpenElsewhere(id)
-    }
 }
