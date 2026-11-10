@@ -166,4 +166,49 @@ final class WindowChromeLayoutTests: XCTestCase {
         XCTAssertTrue(surface.isHidden)
         XCTAssertEqual(homeContainer.alphaValue, 0.2)
     }
+
+    func testFoldedChromeKeepsThePageSizeAndRestoresTheSameView() throws {
+        let chrome = makeChrome()
+        chrome.frame = NSRect(x: 0, y: 0, width: 280, height: 360)
+        chrome.setTabs([ChromeTab(number: 1, title: "首页", kind: nil),
+                        ChromeTab(number: 2, title: "浏览器", kind: .browser)], selected: 2)
+        let page = NSView()
+        chrome.showReadingSurface(page)
+        chrome.layoutSubtreeIfNeeded()
+        let host = try XCTUnwrap(page.superview)
+        let originalSize = page.frame.size
+        chrome.setFolded(true)
+        chrome.setFrameSize(NSSize(width: 280, height: 28))
+        chrome.layoutSubtreeIfNeeded()
+        XCTAssertTrue(host.isHidden)
+        XCTAssertEqual(page.frame.size, originalSize)
+        XCTAssertTrue(chrome.subviews.filter { $0 is WindowTabStrip || $0 is TabSwitcherButton }.allSatisfy(\.isHidden))
+        XCTAssertFalse(chrome.foldButton.isHidden)
+        XCTAssertTrue(chrome.foldButton.isEnabled)
+        chrome.setFrameSize(NSSize(width: 280, height: 360))
+        chrome.setFolded(false)
+        chrome.layoutSubtreeIfNeeded()
+        XCTAssertFalse(host.isHidden)
+        XCTAssertTrue(page.superview === host)
+        XCTAssertEqual(page.frame.size, originalSize)
+    }
+
+    func testFoldingToggleReportsItsStateAndStaysAvailableInNarrowWindows() {
+        var toggles = 0
+        let chrome = MiniWindowChromeView(actions: .init(
+            addTab: {}, selectTab: { _ in }, closeTab: { _ in },
+            windowSettings: { _ in }, toggleFolding: { toggles += 1 },
+            toggleAutomaticHiding: {}, toggleLock: {}, hide: {}, close: {}, drag: { _ in }))
+        chrome.setFrameSize(NSSize(width: 120, height: 90))
+        chrome.layoutSubtreeIfNeeded()
+        XCTAssertFalse(chrome.foldButton.isHidden)
+        XCTAssertTrue(chrome.edgeRevealButton.isHidden)
+        XCTAssertEqual(chrome.foldButton.accessibilityLabel(), "收起为横条")
+        chrome.foldButton.performClick(nil)
+        XCTAssertEqual(toggles, 1)
+        chrome.update(isLocked: false, automaticHiding: false, automaticFolding: true)
+        XCTAssertEqual(chrome.foldButton.accessibilityLabel(), "保持展开")
+        chrome.update(isLocked: true, automaticHiding: false, automaticFolding: true)
+        XCTAssertFalse(chrome.foldButton.isEnabled)
+    }
 }

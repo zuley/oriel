@@ -50,6 +50,10 @@ final class MiniWindowSession: ObservableObject, Identifiable {
             close: { [weak self] in self?.close() },
             frameChanged: { [weak self] frame in self?.windowFrameChanged(frame, for: id) },
             geometryInteractionChanged: { [weak self] active in self?.geometryInteractionChanged(active, for: id) },
+            toggleAutomaticFolding: { [weak self] in
+                guard let self else { return }
+                self.setAutomaticFolding(!(self.snapshot?.automaticFolding ?? false))
+            },
             renameWindow: { [weak self] in self?.requestRename() },
             noteIsOpenElsewhere: { note in noteIsOpenElsewhere(note, id) },
             focusNoteElsewhere: { note in focusNoteElsewhere(note, id) },
@@ -81,6 +85,8 @@ final class MiniWindowSession: ObservableObject, Identifiable {
               panel.attachedSheet == nil else { return }
         panel.cancelGeometryInteraction()
         geometryInteractionChanged(false, for: id)
+        group.send(.pointer(NSEvent.mouseLocation, editing: true), to: id)
+        synchronize()
         let alert = NSAlert()
         alert.messageText = "重命名小窗"
         alert.informativeText = "最多 32 个字"
@@ -112,6 +118,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
 
     private func windowFrameChanged(_ frame: CGRect, for id: UUID) {
         guard panel != nil, group.snapshot(for: id) != nil else { return }
+        updateFoldingScreen()
         group.send(.frame(frame), to: id)
         synchronize()
     }
@@ -125,6 +132,12 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     func setLocked(_ locked: Bool) { group.send(.setLocked(locked), to: id); synchronize() }
     func setAutomaticHiding(_ enabled: Bool) {
         group.send(.automaticHiding(enabled, pointer: NSEvent.mouseLocation), to: id)
+        synchronize()
+    }
+    func setAutomaticFolding(_ enabled: Bool) {
+        if enabled { panel?.prepareForFolding() }
+        updateFoldingScreen()
+        group.send(.automaticFolding(enabled, pointer: NSEvent.mouseLocation), to: id)
         synchronize()
     }
     func recover() { panel?.cancelGeometryInteraction(); group.send(.recover, to: id); synchronize() }
@@ -154,7 +167,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
             snapshot = current
             onStateChange()
         }
-        guard let current, current.automaticHiding else {
+        guard let current, current.automaticHiding || current.automaticFolding else {
             stopSampling()
             return
         }
@@ -196,9 +209,14 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     }
 
     private func samplePointer(for id: UUID) {
-        guard sampledWindowID == id, let panel, !panel.keepsWindowVisible else { return }
-        group.send(.pointer(NSEvent.mouseLocation, editing: panel.hasEditingFocus), to: id)
+        guard sampledWindowID == id, let panel else { return }
+        updateFoldingScreen()
+        group.send(.pointer(NSEvent.mouseLocation, editing: panel.hasEditingFocus || panel.keepsWindowVisible), to: id)
         synchronize()
+    }
+
+    private func updateFoldingScreen() {
+        if let bounds = panel?.foldingVisibleFrame { group.send(.visibleFrame(bounds), to: id) }
     }
 
     private func stopSampling() {

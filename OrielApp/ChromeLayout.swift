@@ -24,6 +24,8 @@ struct ChromeLayout: Equatable {
     var close: CGRect
     var hide: CGRect
     var addTab: CGRect
+    /// Roll the window into its toolbar until hovered.
+    var fold: CGRect
     /// The eye that switches edge reveal on and off.
     var edgeReveal: CGRect
     /// The slider that opens the transparency panel.
@@ -55,11 +57,14 @@ struct ChromeLayout: Equatable {
         let sideWidth: CGFloat = narrow ? 16 : 22
         let sideGap: CGFloat = narrow ? 2 : 0
         let window = CGRect(x: lock.minX - sideGap - sideWidth, y: 0, width: sideWidth, height: toolbarHeight)
-        let edgeReveal = CGRect(x: window.minX - sideGap - sideWidth, y: 0, width: sideWidth,
+        // At the smallest widths keep folding/settings/lock; edge reveal remains in the app menu.
+        let edgeWidth: CGFloat = width >= 180 ? sideWidth : 0
+        let edgeReveal = CGRect(x: window.minX - (edgeWidth > 0 ? sideGap + edgeWidth : 0), y: 0, width: edgeWidth,
                                 height: toolbarHeight)
+        let fold = CGRect(x: edgeReveal.minX - sideGap - sideWidth, y: 0, width: sideWidth, height: toolbarHeight)
 
         let titleStart = addTab.maxX + 4
-        let titleWidth = max(0, edgeReveal.minX - 4 - titleStart)
+        let titleWidth = max(0, fold.minX - 4 - titleStart)
         let title = titleWidth >= minimumTitleWidth
             ? CGRect(x: titleStart, y: 6, width: titleWidth, height: 16) : nil
 
@@ -74,7 +79,7 @@ struct ChromeLayout: Equatable {
         let strip = mode == .strip
             ? CGRect(x: 6, y: toolbarHeight, width: max(0, width - 12), height: stripHeight)
             : CGRect(x: 6, y: toolbarHeight, width: max(0, width - 12), height: 0)
-        return ChromeLayout(narrow: narrow, close: close, hide: hide, addTab: addTab,
+        return ChromeLayout(narrow: narrow, close: close, hide: hide, addTab: addTab, fold: fold,
                             edgeReveal: edgeReveal, window: window, lock: lock, title: title,
                             tabMode: mode, tabStrip: strip, contentTop: strip.maxY + stripGap)
     }

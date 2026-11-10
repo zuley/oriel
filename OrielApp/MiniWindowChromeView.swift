@@ -19,6 +19,7 @@ final class MiniWindowChromeView: NSView {
         var dropNovel: ([URL]) -> Bool = { _ in false }
         var renameWindow: () -> Void = {}
         var windowSettings: (NSView) -> Void
+        var toggleFolding: () -> Void = {}
         var toggleAutomaticHiding: () -> Void
         var toggleLock: () -> Void
         var hide: () -> Void
@@ -35,10 +36,14 @@ final class MiniWindowChromeView: NSView {
     private let closeTabAction: (Int) -> Void
     /// The eye switches edge reveal, the slider opens transparency, the lock freezes pass-through.
     let edgeRevealButton: ChromeButton
+    let foldButton: ChromeButton
     let windowButton: ChromeButton
     private let lockButton: ChromeButton
     private var toolbarButtons: [ChromeButton] = []
     private var isLocked = false
+    private(set) var isFolded = false
+    private var showingHome = true
+    private var expandedHeight: CGFloat = 360
     private var tabs: [ChromeTab] = []
     private var selectedTab = 0
     private weak var presentedContent: NSView?
@@ -63,6 +68,7 @@ final class MiniWindowChromeView: NSView {
         edgeRevealButton = ChromeButton(symbol: .eye, label: "边缘唤醒") { _ in
             actions.toggleAutomaticHiding()
         }
+        foldButton = ChromeButton(symbol: .fold, label: "收起为横条") { _ in actions.toggleFolding() }
         windowButton = ChromeButton(symbol: .settings, label: "窗口设置", action: actions.windowSettings)
         super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 360))
 
@@ -77,8 +83,7 @@ final class MiniWindowChromeView: NSView {
 
         let hide = ChromeButton(symbol: .minus, label: "收起到菜单栏") { _ in actions.hide() }
         let close = ChromeButton(symbol: .close, label: "关闭小窗") { _ in actions.close() }
-        // The order matches ChromeLayout: close, hide, add, edge reveal, window, lock.
-        toolbarButtons = [close, hide, addTab, edgeRevealButton, windowButton, lockButton]
+        toolbarButtons = [close, hide, addTab, foldButton, edgeRevealButton, windowButton, lockButton]
         for button in toolbarButtons {
             button.onHover = { [weak self, weak button] entered in
                 guard let self, let button else { return }
@@ -122,31 +127,33 @@ final class MiniWindowChromeView: NSView {
     override func layout() {
         super.layout()
         dismissTooltip()
-        let layout = ChromeLayout.make(width: bounds.width, height: bounds.height, tabCount: tabs.count)
+        if !isFolded { expandedHeight = bounds.height }
+        let pageHeight = isFolded ? expandedHeight : bounds.height
+        let layout = ChromeLayout.make(width: bounds.width, height: pageHeight, tabCount: tabs.count)
         layoutState = layout
-        let frames = [layout.close, layout.hide, layout.addTab, layout.edgeReveal,
+        let frames = [layout.close, layout.hide, layout.addTab, layout.fold, layout.edgeReveal,
                       layout.window, layout.lock]
         for (button, frame) in zip(toolbarButtons, frames) {
             button.frame = frame
-            button.isHidden = isLocked && button === lockButton
+            button.isHidden = frame.isEmpty || (isLocked && button === lockButton)
         }
 
-        let showsSwitcher = layout.tabMode == .switcher && layout.title != nil
+        let showsSwitcher = !isFolded && layout.tabMode == .switcher && layout.title != nil
         tabSwitcher.isHidden = !showsSwitcher
         windowName.isHidden = layout.title == nil || showsSwitcher
         if let title = layout.title {
             windowName.frame = title
             tabSwitcher.frame = title.insetBy(dx: 0, dy: -2)
         }
-        tabStrip.isHidden = layout.tabMode != .strip
+        tabStrip.isHidden = isFolded || layout.tabMode != .strip
         tabStrip.frame = layout.tabStrip
 
         let contentTop = layout.contentTop
         content.frame = NSRect(x: 6, y: contentTop, width: max(0, bounds.width - 12),
-                               height: max(0, bounds.height - contentTop - 6))
+                               height: max(0, pageHeight - contentTop - 6))
         home.frame = content.bounds
         surfaceHost.frame = NSRect(x: 0, y: contentTop, width: bounds.width,
-                                    height: max(0, bounds.height - contentTop))
+                                    height: max(0, pageHeight - contentTop))
         content.needsDisplay = true
         home.needsDisplay = true
         window?.invalidateCursorRects(for: self)
@@ -180,9 +187,21 @@ final class MiniWindowChromeView: NSView {
     }
 
     func showHome() {
+        showingHome = true
         surfaceHost.isHidden = true
-        content.isHidden = false
+        content.isHidden = isFolded
         home.isHidden = false
+    }
+
+    func setFolded(_ folded: Bool) {
+        guard isFolded != folded else { return }
+        if folded { layoutSubtreeIfNeeded() }
+        isFolded = folded
+        content.isHidden = folded || !showingHome
+        surfaceHost.isHidden = folded || showingHome
+        if folded { cancelContentTransition(); dismissTooltip() }
+        needsLayout = true
+        if !folded { animateContentSwitchIfNeeded(force: true) }
     }
 
     func setWindowName(_ name: String) {
@@ -202,10 +221,10 @@ final class MiniWindowChromeView: NSView {
 
     /// Activation presents the new page before refreshing its tabs. Animate only that
     /// change; title updates keep the current page and its animation untouched.
-    private func animateContentSwitchIfNeeded() {
-        let container = content.isHidden ? surfaceHost : content
-        let page = content.isHidden ? surfaceHost.subviews.first : home
-        let changed = presentedTab != selectedTab || presentedContent !== page
+    private func animateContentSwitchIfNeeded(force: Bool = false) {
+        let container = showingHome ? content : surfaceHost
+        let page = showingHome ? home : surfaceHost.subviews.first
+        let changed = force || presentedTab != selectedTab || presentedContent !== page
         let hadContent = presentedTab != nil
         presentedTab = selectedTab
         presentedContent = page
@@ -215,7 +234,7 @@ final class MiniWindowChromeView: NSView {
         let interruptedOpacity = layer?.animation(forKey: Self.contentTransitionKey) != nil
             ? layer?.presentation()?.opacity : nil
         cancelContentTransition()
-        guard hadContent, window?.isVisible == true, !container.isHiddenOrHasHiddenAncestor,
+        guard hadContent, !isFolded, window?.isVisible == true, !container.isHiddenOrHasHiddenAncestor,
               !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
               let layer, layer.opacity > 0 else { return }
 
@@ -247,9 +266,10 @@ final class MiniWindowChromeView: NSView {
     }
 
     private func showSurface(_ view: NSView, inset: CGFloat, background: NSColor) {
+        showingHome = false
         content.isHidden = true
         surfaceHost.layer?.backgroundColor = background.cgColor
-        surfaceHost.isHidden = false
+        surfaceHost.isHidden = isFolded
         layoutSubtreeIfNeeded()
         view.frame = surfaceHost.bounds.insetBy(dx: inset, dy: inset)
         view.autoresizingMask = [.width, .height]
@@ -272,7 +292,7 @@ final class MiniWindowChromeView: NSView {
         home.setBackgroundOpacity(background)
     }
 
-    func update(isLocked: Bool, automaticHiding: Bool) {
+    func update(isLocked: Bool, automaticHiding: Bool, automaticFolding: Bool = false) {
         if self.isLocked != isLocked {
             dismissTooltip()
             if isLocked { cancelContentTransition() }
@@ -288,6 +308,7 @@ final class MiniWindowChromeView: NSView {
         edgeRevealButton.setActive(automaticHiding,
                                    label: automaticHiding ? "关闭边缘唤醒" : "开启边缘唤醒")
         edgeRevealButton.setAccessibilityValue(automaticHiding ? "边缘唤醒已开启" : "边缘唤醒已关闭")
+        foldButton.setActive(automaticFolding, label: automaticFolding ? "保持展开" : "收起为横条")
         windowButton.setHint("透明度设置")
         lockButton.setActive(isLocked, label: isLocked ? "解除锁定穿透" : "锁定穿透")
     }
@@ -525,7 +546,7 @@ final class ChromeButton: NSButton {
             context.endTransparencyLayer()
             context.restoreGState()
         }
-        let highlighted = isEnabled && active && (symbol == .lock || symbol == .eye)
+        let highlighted = isEnabled && active && (symbol == .lock || symbol == .eye || symbol == .fold)
         if symbol == .minus || symbol == .close {
             drawTrafficLight()
         } else {
@@ -570,7 +591,7 @@ final class ChromeButton: NSButton {
 
 @MainActor
 enum ChromeSymbol: Equatable {
-    case add, eye, settings, lock, minus, close, stocks
+    case add, fold, eye, settings, lock, minus, close, stocks
 
     func draw(in rect: NSRect, color: NSColor) {
         NSGraphicsContext.saveGraphicsState()
@@ -596,6 +617,9 @@ enum ChromeSymbol: Equatable {
         case .add:
             line([NSPoint(x: 3, y: 10), NSPoint(x: 17, y: 10)])
             line([NSPoint(x: 10, y: 3), NSPoint(x: 10, y: 17)])
+        case .fold:
+            line([NSPoint(x: 3, y: 4), NSPoint(x: 17, y: 4)])
+            line([NSPoint(x: 5, y: 13), NSPoint(x: 10, y: 8), NSPoint(x: 15, y: 13)])
         case .eye:
             path.move(to: NSPoint(x: 1, y: 10))
             path.curve(to: NSPoint(x: 19, y: 10), controlPoint1: NSPoint(x: 5, y: 2),

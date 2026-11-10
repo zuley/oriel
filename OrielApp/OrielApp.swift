@@ -78,6 +78,7 @@ private struct IndividualWindowActions: View {
     @ObservedObject var window: MiniWindowSession
     var body: some View {
         Toggle("锁定穿透", isOn: Binding(get: { window.snapshot?.isLocked ?? false }, set: window.setLocked))
+        Toggle("悬停展开", isOn: Binding(get: { window.snapshot?.automaticFolding ?? false }, set: window.setAutomaticFolding))
         Toggle("边缘唤醒", isOn: Binding(get: { window.snapshot?.automaticHiding ?? false }, set: window.setAutomaticHiding))
         Button("恢复小窗") { window.recover() }
         Button("关闭小窗") { window.close() }

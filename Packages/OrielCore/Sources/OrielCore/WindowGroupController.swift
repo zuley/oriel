@@ -24,8 +24,10 @@ public final class WindowGroupController {
         case recover
         case close
         case automaticHiding(Bool, pointer: CGPoint)
+        case automaticFolding(Bool, pointer: CGPoint)
         case pointer(CGPoint, editing: Bool)
         case frame(CGRect)
+        case visibleFrame(CGRect)
         case beginGeometry
         case endGeometry(pointer: CGPoint)
     }
@@ -56,8 +58,10 @@ public final class WindowGroupController {
             controllers.removeValue(forKey: id)
             order.removeAll { $0 == id }
         case .automaticHiding(let enabled, let pointer): controller.setAutomaticHiding(enabled, pointer: pointer)
+        case .automaticFolding(let enabled, let pointer): controller.setAutomaticFolding(enabled, pointer: pointer)
         case .pointer(let pointer, let editing): controller.samplePointer(pointer, for: id, editing: editing)
         case .frame(let frame): controller.updateFrame(frame, for: id)
+        case .visibleFrame(let frame): controller.updateVisibleFrame(frame)
         case .beginGeometry: controller.beginGeometryChange(for: id)
         case .endGeometry(let pointer): controller.endGeometryChange(pointer: pointer, for: id)
         }

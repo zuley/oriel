@@ -16,6 +16,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         let close: () -> Void
         let frameChanged: (CGRect) -> Void
         let geometryInteractionChanged: (Bool) -> Void
+        var toggleAutomaticFolding: () -> Void = {}
         var renameWindow: () -> Void = {}
         var noteIsOpenElsewhere: (UUID) -> Bool = { _ in false }
         var focusNoteElsewhere: (UUID) -> Bool = { _ in false }
@@ -98,8 +99,26 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private var revealingToolbar = false
     private var trackingMenus = Set<ObjectIdentifier>()
     private var isDisposed = false
+    private var applyingPresentationFrame = false
+    private var expandedMinimumHeight: CGFloat = 90
 
-    var bodyFrame: NSRect { convertToScreen(chrome.convert(chrome.bounds, to: nil)) }
+    var bodyFrame: NSRect {
+        let body = convertToScreen(chrome.convert(chrome.bounds, to: nil))
+        guard let state = currentState, state.isFolded else { return body }
+        let y = state.foldingEdge == .bottom ? body.minY : body.maxY - state.frame.height
+        return NSRect(x: body.minX, y: y,
+                      width: body.width, height: state.frame.height)
+    }
+
+    var foldingVisibleFrame: NSRect? {
+        let body = convertToScreen(chrome.convert(chrome.bounds, to: nil))
+        let barY = currentState?.isFolded == true ? body.midY
+            : (currentState?.foldingEdge == .bottom ? body.minY + 14 : body.maxY - 14)
+        let anchor = NSPoint(x: body.midX, y: barY)
+        let display = NSScreen.screens.first { $0.frame.contains(anchor) } ?? screen ?? NSScreen.main
+        // Core stores the body; leave room for the native adapter's four-point shadow.
+        return display?.visibleFrame.insetBy(dx: 4, dy: 4)
+    }
 
     var hasEditingFocus: Bool {
         guard isKeyWindow, let responder = firstResponder else { return false }
@@ -138,6 +157,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         isMovableByWindowBackground = false
         acceptsMouseMovedEvents = true
         contentMinSize = CGSize(width: min(frame.width, 120), height: min(frame.height, 90))
+        expandedMinimumHeight = contentMinSize.height
         isOpaque = false
         backgroundColor = .clear
         appearance = NSAppearance(named: .aqua)
@@ -158,6 +178,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             },
             renameWindow: actions.renameWindow,
             windowSettings: { [weak self] sender in self?.showSettings(from: sender) },
+            toggleFolding: actions.toggleAutomaticFolding,
             toggleAutomaticHiding: actions.toggleAutomaticHiding,
             toggleLock: actions.toggleLock,
             hide: actions.hide,
@@ -205,6 +226,11 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         finishGeometryInteraction(reportFinalFrame: false, notify: false)
     }
 
+    func prepareForFolding() {
+        selected.notes?.document.commitEditing?()
+        makeFirstResponder(nil)
+    }
+
     func apply(_ state: WindowSnapshot) {
         guard !isDisposed else { return }
         currentState = state
@@ -228,6 +254,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         if state.isLocked && isKeyWindow { resignKey() }
         ignoresMouseEvents = state.isLocked
         alphaValue = state.opacity * (emphasis == .dimmed ? 0.22 : 1)
+        if !state.isVisible && isVisible { orderOut(nil) }
+        applyPresentationFrame(state)
         updateToolbar()
         if state.isVisible && !isVisible {
             // Automatic revelation must not activate the app or acquire keyboard focus.
@@ -236,6 +264,18 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             orderOut(nil)
         }
         synchronizeLockRecovery()
+    }
+
+    private func applyPresentationFrame(_ state: WindowSnapshot) {
+        applyingPresentationFrame = true
+        defer { applyingPresentationFrame = false }
+        if state.isFolded { chrome.setFolded(true) }
+        contentMinSize.height = state.isFolded ? min(expandedMinimumHeight, 36) : expandedMinimumHeight
+        let target = state.presentationFrame.insetBy(dx: -4, dy: -4)
+        if frame != target {
+            setFrame(target, display: state.isVisible)
+        }
+        if !state.isFolded { chrome.setFolded(false) }
     }
 
     func dispose() {
@@ -286,7 +326,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     }
 
     fileprivate func startEdgeResize(_ event: NSEvent) {
-        guard !isDisposed, isVisible, !ignoresMouseEvents, geometryInteraction == nil else { return }
+        guard !isDisposed, isVisible, !ignoresMouseEvents, geometryInteraction == nil,
+              currentState?.isFolded != true else { return }
         resizeStart = (frame, convertPoint(toScreen: event.locationInWindow))
         beginGeometryInteraction(.resizing)
     }
@@ -319,12 +360,14 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     func windowDidMove(_ notification: Notification) {
         guard !isDisposed else { return }
         positionLockRecovery()
+        guard !applyingPresentationFrame else { return }
         actions.frameChanged(bodyFrame)
     }
 
     func windowDidResize(_ notification: Notification) {
         guard !isDisposed else { return }
         positionLockRecovery()
+        guard !applyingPresentationFrame else { return }
         actions.frameChanged(bodyFrame)
     }
 
@@ -359,7 +402,8 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     private func updateToolbar() {
         chrome?.update(
             isLocked: currentState?.isLocked ?? false,
-            automaticHiding: currentState?.automaticHiding ?? false
+            automaticHiding: currentState?.automaticHiding ?? false,
+            automaticFolding: currentState?.automaticFolding ?? false
         )
     }
 
@@ -432,10 +476,11 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         if let visible = (screen ?? NSScreen.main)?.visibleFrame {
             let width = min(preferences.width, visible.width)
             let height = min(preferences.height, visible.height)
-            setFrame(NSRect(x: min(max(frame.minX, visible.minX), visible.maxX - width),
-                            y: min(max(frame.maxY - height, visible.minY), visible.maxY - height),
-                            width: width, height: height), display: true)
-            actions.frameChanged(bodyFrame)
+            let expanded = currentState?.frame.insetBy(dx: -4, dy: -4) ?? frame
+            let target = NSRect(x: min(max(expanded.minX, visible.minX), visible.maxX - width),
+                                y: min(max(expanded.maxY - height, visible.minY), visible.maxY - height),
+                                width: width, height: height)
+            actions.frameChanged(target.insetBy(dx: 4, dy: 4))
         }
     }
 
@@ -987,6 +1032,8 @@ private final class PanelShadowView: NSView {
         let topBand: CGFloat = 12
         let toolbarBottom = bodyRect.maxY - 28
         for handle in handles {
+            handle.isHidden = chrome?.isFolded == true
+            if handle.isHidden { continue }
             let edge = handle.edge
             let left = edge.contains(.left), right = edge.contains(.right)
             let top = edge.contains(.top), bottom = edge.contains(.bottom)
