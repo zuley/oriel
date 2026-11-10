@@ -299,3 +299,95 @@ final class NotesWorkspaceTests: XCTestCase {
         document.releaseEditor()
     }
 }
+
+// R02: per-keystroke cost (docs/plans/017-refactor-tasks.md).
+extension NotesWorkspaceTests {
+    func testEditTreatsCanonicallyEquivalentButDifferentBytesAsAChange() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = NotesWorkspace(root: root, automaticSaving: false)
+        let document = workspace.create()
+        document.edit("caf\u{E9}")
+        try workspace.saveAll()
+        // Same text to Unicode's eyes, different bytes on disk: the saved file must follow the editor.
+        XCTAssertTrue(document.edit("cafe\u{301}"))
+        XCTAssertTrue(document.isDirty)
+        try workspace.saveAll()
+        let restored = try XCTUnwrap(NotesWorkspace(root: root).documents[document.id])
+        XCTAssertTrue(restored.text.utf8.elementsEqual("cafe\u{301}".utf8))
+    }
+
+    func testEditingWithABridgedEditorStringIsANoOpWhenUnchanged() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = NotesWorkspace(root: root, automaticSaving: false)
+        let document = workspace.create()
+        document.edit("标题\n正文")
+        try workspace.saveAll()
+        var changes = 0
+        let previous = document.changed
+        document.changed = { changes += 1; previous?() }
+        let bridged = NSMutableString(string: "标题\n正文") as String
+        XCTAssertTrue(document.edit(bridged))
+        XCTAssertEqual(changes, 0)
+        XCTAssertFalse(document.isDirty)
+    }
+
+    func testWorkspaceAnnouncesOnlyTitleAndSavedStateChangesWhileTyping() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = NotesWorkspace(root: root, automaticSaving: false)
+        var announcements = 0
+        let subscription = workspace.objectWillChange.sink { announcements += 1 }
+        defer { subscription.cancel() }
+        let document = workspace.create()
+        announcements = 0
+
+        document.edit("购")                    // empty draft gains content: becomes listed
+        XCTAssertEqual(announcements, 1)
+        document.edit("购物")                  // title changes
+        XCTAssertEqual(announcements, 2)
+        document.edit("购物\n")                 // title unchanged
+        document.edit("购物\n牛")
+        document.edit("购物\n牛奶")
+        XCTAssertEqual(announcements, 2)
+
+        try workspace.saveAll()
+        announcements = 0
+        document.edit("购物\n牛奶 鸡蛋")         // saved note becomes dirty
+        XCTAssertEqual(announcements, 1)
+        document.edit("购物\n牛奶 鸡蛋 面包")
+        XCTAssertEqual(announcements, 1)
+    }
+
+    func testHostedEditorFollowsTextReplacedOutsideTheEditor() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = NotesWorkspace(root: root, automaticSaving: false)
+        let document = workspace.create()
+        document.edit("原文")
+        let hosting = NSHostingView(rootView: NotesEditor(document: document))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 120), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        hosting.layoutSubtreeIfNeeded()
+        func textView(_ view: NSView) -> NSTextView? {
+            (view as? NSTextView) ?? view.subviews.lazy.compactMap(textView).first
+        }
+        let editor = try XCTUnwrap(textView(hosting))
+        editor.setSelectedRange(NSRange(location: 2, length: 0))
+        editor.insertText("加字", replacementRange: NSRange(location: NSNotFound, length: 0))
+        hosting.layoutSubtreeIfNeeded()
+        XCTAssertEqual(editor.string, "原文加字")
+        XCTAssertEqual(document.text, "原文加字")
+
+        var record = document.record
+        record.text = "外部替换"
+        document.accept(record)
+        hosting.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date())
+        XCTAssertEqual(editor.string, "外部替换")
+        window.contentView = nil
+        document.releaseEditor()
+    }
+}

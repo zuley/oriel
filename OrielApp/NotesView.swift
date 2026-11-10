@@ -251,6 +251,7 @@ struct NotesEditor: NSViewRepresentable {
     var compact = false
 
     func makeNSView(context: Context) -> NSScrollView {
+        context.coordinator.syncedText = document.text
         if let scroll = document.editorView, let editor = scroll.documentView as? NotesTextView {
             editor.delegate = context.coordinator
             context.coordinator.editor = editor
@@ -302,8 +303,12 @@ struct NotesEditor: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let editor = scroll.documentView as? NotesTextView else { return }
         editor.textContainerInset = NSSize(width: compact ? 3 : 6, height: compact ? 2 : 6)
-        guard !editor.hasMarkedText(), editor.string != document.text else { return }
-        editor.string = document.text
+        // Runs on every keystroke (the document is observed). Typing already put the
+        // model's text in `syncedText`, so this is a byte comparison of the same buffer;
+        // the editor is read only when the text was replaced from outside.
+        guard !editor.hasMarkedText(), !NoteDocument.sameText(document.text, context.coordinator.syncedText) else { return }
+        context.coordinator.syncedText = document.text
+        if !NoteDocument.sameText(editor.string, document.text) { editor.string = document.text }
     }
 
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
@@ -317,9 +322,11 @@ struct NotesEditor: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         weak var editor: NotesTextView?
+        /// The model text last known to match the editor.
+        var syncedText = ""
         func textDidChange(_ notification: Notification) {
-            guard let editor, !editor.hasMarkedText() else { return }
-            _ = editor.note?.edit(editor.string)
+            guard let editor, !editor.hasMarkedText(), let note = editor.note else { return }
+            if note.edit(editor.string) { syncedText = note.text }
         }
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let editor else { return }

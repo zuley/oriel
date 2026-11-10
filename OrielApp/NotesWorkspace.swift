@@ -18,8 +18,18 @@ final class NoteDocument: ObservableObject, Identifiable {
     var text: String { record.text }
     var title: String { record.title }
     var isDirty: Bool {
-        isPersisted ? savedRecord != record : !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard isPersisted else {
+            // A draft counts once it has any non-blank character; stop at the first one.
+            return text.unicodeScalars.contains { !CharacterSet.whitespacesAndNewlines.contains($0) }
+        }
+        guard let saved = savedRecord else { return true }
+        // Every edit stamps `updated`, so typing is decided without reading the text.
+        return saved.updated != record.updated || saved.pinned != record.pinned
+            || saved.deleted != record.deleted || !Self.sameText(saved.text, record.text)
     }
+    /// Set by `edit` before `changed` runs: the title or saved state changed, so note lists
+    /// and tab titles need a refresh. Ordinary typing inside the body leaves it false.
+    private(set) var lastEditChangedListing = false
 
     init(record: NoteRecord, persisted: Bool) {
         self.id = record.id
@@ -33,12 +43,26 @@ final class NoteDocument: ObservableObject, Identifiable {
             errorMessage = NotesError.tooLarge.localizedDescription
             return false
         }
-        guard text != record.text else { return true }
+        guard !Self.sameText(text, record.text) else { return true }
+        let wasDirty = isDirty
+        let oldTitle = title
         record.text = text
         record.updated = Date()
         errorMessage = nil
+        lastEditChangedListing = wasDirty != isDirty || oldTitle != title
         changed?()
         return true
+    }
+
+    /// Exact equality (same code units), not Swift's canonical equivalence: a canonically
+    /// equivalent text with different bytes is still a change to save. Editor text is a
+    /// bridged NSString; Swift `==` on 1 MiB of it costs about 11 ms and converting it to
+    /// native UTF-8 about 19 ms, while this is O(1) for the same object or a different
+    /// length and a code-unit comparison otherwise.
+    nonisolated static func sameText(_ lhs: String, _ rhs: String) -> Bool {
+        let left = lhs as NSString, right = rhs as NSString
+        if left === right { return true }
+        return left.length == right.length && left.isEqual(to: rhs)
     }
 
     func releaseEditor() {
@@ -130,9 +154,11 @@ final class NotesWorkspace: ObservableObject {
 
     private func attach(_ document: NoteDocument) {
         documents[document.id] = document
-        document.changed = { [weak self] in
+        document.changed = { [weak self, weak document] in
             guard let self else { return }
-            objectWillChange.send()
+            // The editor and its status dot observe the document itself; the workspace
+            // (lists, tab titles in every window) only needs title and saved-state changes.
+            if document?.lastEditChangedListing != false { objectWillChange.send() }
             firstEdit = firstEdit ?? clock()
             lastEdit = clock()
             scheduleSave()
