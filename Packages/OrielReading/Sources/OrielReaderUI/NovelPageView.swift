@@ -150,18 +150,59 @@ public final class NovelPageScroll: NSScrollView {
         if changed { prepareKeyboardReading() }
     }
 
+    /// Chapters at least this long (UTF-16 units) reflow once a width change settles;
+    /// a full reflow of 1 MiB takes about 115 ms, too slow for every drag step.
+    private static let deferredReflowLength = 50_000
+    private static let reflowDelay: TimeInterval = 0.15
+    private var reflowTimer: Timer?
+    /// Content width of the last full layout; nil until the reader has a real size.
+    private var laidOutWidth: CGFloat?
+
     public override func setFrameSize(_ newSize: NSSize) {
         guard bookID != nil, !restoring, frame.size != newSize else { super.setFrameSize(newSize); return }
         let target = anchor
+        // Only a chapter already laid out at a real width defers; the first layout is immediate.
+        let deferring = reflowTimer != nil
+            || (laidOutWidth != nil && newSize.width != frame.width && storage.length >= Self.deferredReflowLength)
         restoring = true
-        super.setFrameSize(newSize)
-        restore(target)
+        if deferring {
+            // Keep wrapping at the old width while the edge moves; the passage stays on screen.
+            container.widthTracksTextView = false
+            super.setFrameSize(newSize)
+            scheduleReflow()
+        } else {
+            super.setFrameSize(newSize)
+            restore(target)
+        }
         restoring = false
     }
 
+    private func scheduleReflow() {
+        reflowTimer?.invalidate()
+        let timer = Timer(timeInterval: Self.reflowDelay, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.reflowTimer = nil
+                self.restoring = true
+                self.restore(self.anchor)
+                self.restoring = false
+            }
+        }
+        reflowTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
     private func restore(_ target: Int) {
+        reflowTimer?.invalidate()
+        reflowTimer = nil
+        if !container.widthTracksTextView {
+            container.widthTracksTextView = true
+            container.size = NSSize(width: max(0, contentSize.width - 2 * reader.textContainerInset.width),
+                                    height: container.size.height)
+        }
         anchor = target
         guard contentSize.width > 1, contentSize.height > 1, storage.length > 0 else { return }
+        laidOutWidth = contentSize.width
         let inset = NSSize(width: contentSize.width < 140 ? 2 : 6, height: contentSize.height < 40 ? 1 : 5)
         if reader.textContainerInset != inset { reader.textContainerInset = inset }
         reader.setFrameSize(.init(width: contentSize.width, height: max(1, reader.frame.height)))
