@@ -22,33 +22,11 @@ if [[ ${#core_sources[@]} -eq 0 ]]; then
   exit 1
 fi
 
-app_sources=(
-  "$project_root/OrielApp/OrielPalette.swift"
-  "$project_root/OrielApp/MiniWindowSession.swift"
-  "$project_root/OrielApp/DataExport.swift"
-  "$project_root/OrielApp/ManagementSettingsView.swift"
-  "$project_root/OrielApp/ManagementView.swift"
-  "$project_root/OrielApp/ManagementWindow.swift"
-  "$project_root/OrielApp/AppPreferences.swift"
-  "$project_root/OrielApp/OrielApp.swift"
-  "$project_root/OrielApp/AppModel.swift"
-  "$project_root/OrielApp/MiniPanel.swift"
-  "$project_root/OrielApp/BrowserModel.swift"
-  "$project_root/OrielApp/BrowserView.swift"
-  "$project_root/OrielApp/StockMarket.swift"
-  "$project_root/OrielApp/StockChart.swift"
-  "$project_root/OrielApp/StocksView.swift"
-  "$project_root/OrielApp/NovelSession.swift"
-  "$project_root/OrielApp/NovelView.swift"
-  "$project_root/OrielApp/NotesStore.swift"
-  "$project_root/OrielApp/NotesWorkspace.swift"
-  "$project_root/OrielApp/NotesView.swift"
-  "$project_root/OrielApp/PageKind.swift"
-  "$project_root/OrielApp/ChromeLayout.swift"
-  "$project_root/OrielApp/ChromeHomeView.swift"
-  "$project_root/OrielApp/WindowTabStrip.swift"
-  "$project_root/OrielApp/MiniWindowChromeView.swift"
-)
+# Every Swift file under OrielApp, so new sources need no edit here.
+app_sources=()
+while IFS= read -r -d '' file; do
+  app_sources+=("$file")
+done < <(/usr/bin/find "$project_root/OrielApp" -name '*.swift' -print0 | /usr/bin/sort -z)
 
 mkdir -p "$module_dir" "$output_dir/ModuleCache" "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources"
 

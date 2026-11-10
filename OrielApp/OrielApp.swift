@@ -106,6 +106,18 @@ final class OrielAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        NotesWorkspace.shared.confirmCanClose() ? .terminateNow : .terminateCancel
+        // One question for every window's running terminal commands, before saving notes.
+        let busy = AppModel.shared.windows.flatMap(\.busyTerminalTitles)
+        if let message = CloseGuard.message(busy: busy) {
+            let alert = NSAlert()
+            alert.window.level = .statusBar
+            alert.messageText = "终端中有任务正在运行"
+            alert.informativeText = message.replacingOccurrences(of: "关闭会", with: "退出 Oriel 会")
+            alert.addButton(withTitle: "结束并退出")
+            alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+            NSApp.activate()
+            if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
+        }
+        return NotesWorkspace.shared.confirmCanClose() ? .terminateNow : .terminateCancel
     }
 }

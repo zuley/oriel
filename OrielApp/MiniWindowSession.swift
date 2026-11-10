@@ -144,8 +144,21 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     func findWindow() { recover(); panel?.revealTransparencySettings() }
     func hide() { group.send(.hide, to: id); synchronize() }
 
-    func close() {
-        guard snapshot != nil, let panel, panel.confirmCanClose() else { return }
+    var busyTerminalTitles: [String] { panel?.busyTerminalTitles ?? [] }
+
+    /// `endingJobs`: the user already agreed to end running terminal commands
+    /// (for example in the management window's close confirmation).
+    func close(endingJobs: Bool = false) {
+        guard snapshot != nil, let panel else { return }
+        if !endingJobs, let message = CloseGuard.message(busy: panel.busyTerminalTitles) {
+            // The question is a sheet on this window, so it must be visible and unlocked.
+            if snapshot?.isVisible != true || snapshot?.isLocked == true { recover() }
+            panel.confirmEndingJobs(message, button: "结束并关闭") { [weak self] in
+                self?.close(endingJobs: true)
+            }
+            return
+        }
+        guard panel.confirmCanClose() else { return }
         dispose()
     }
 

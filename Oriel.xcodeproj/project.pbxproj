@@ -64,6 +64,9 @@ A10000000000000000000030 = {isa = PBXBuildFile; fileRef = A200000000000000000000
 		F10000000000000000000301 /* BrowserView.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* BrowserView.swift */; };
 		F10000000000000000000302 /* BrowserAddressLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000302 /* BrowserAddressLayoutTests.swift */; };
 		F10000000000000000000401 /* PerformanceBaselineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000401 /* PerformanceBaselineTests.swift */; };
+		D7DD09ECF9651FCB0F77D19C /* CloseGuardTests.swift in Tests */ = {isa = PBXBuildFile; fileRef = D77BE9A6B14DFE2C9429B8C2 /* CloseGuardTests.swift */; };
+		D7F99E7D01FFA6B53D0D73A9 /* CloseGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D731A3DE63FDC5A98ADF1568 /* CloseGuard.swift */; };
+		D71D5E80602BB3FE55BA131A /* CloseGuard.swift in Tests */ = {isa = PBXBuildFile; fileRef = D731A3DE63FDC5A98ADF1568 /* CloseGuard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -109,6 +112,8 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		E20000000000000000000101 /* OrielPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrielPalette.swift; sourceTree = "<group>"; };
 		F20000000000000000000302 /* BrowserAddressLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserAddressLayoutTests.swift; sourceTree = "<group>"; };
 		F20000000000000000000401 /* PerformanceBaselineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceBaselineTests.swift; sourceTree = "<group>"; };
+		D77BE9A6B14DFE2C9429B8C2 /* CloseGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloseGuardTests.swift; sourceTree = "<group>"; };
+		D731A3DE63FDC5A98ADF1568 /* CloseGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloseGuard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -135,6 +140,7 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		A40000000000000000000002 /* OrielApp */ = {
 			isa = PBXGroup;
 			children = (
+				D731A3DE63FDC5A98ADF1568 /* CloseGuard.swift */,
 				C20000000000000000000105 /* WindowTabStrip.swift */,
 				C20000000000000000000104 /* ChromeHomeView.swift */,
 				C20000000000000000000102 /* ChromeLayout.swift */,
@@ -189,6 +195,7 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			sourceTree = "<group>";
 		};
 		B40000000000000000000001 /* OrielAppTests */ = {isa = PBXGroup; children = (
+				D77BE9A6B14DFE2C9429B8C2 /* CloseGuardTests.swift */,
 				F20000000000000000000302 /* BrowserAddressLayoutTests.swift */,
 				F20000000000000000000401 /* PerformanceBaselineTests.swift */,
 				C20000000000000000000103 /* ChromeLayoutTests.swift */,B20000000000000000000032, B20000000000000000000031, B20000000000000000000030, B20000000000000000000005, B20000000000000000000004 /* WindowChromeLayoutTests.swift */, B20000000000000000000001 /* NovelSessionTests.swift */, B20000000000000000000003 /* StockWatchlistTests.swift */,); path = OrielAppTests; sourceTree = "<group>"; };
@@ -267,6 +274,7 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D7F99E7D01FFA6B53D0D73A9 /* CloseGuard.swift in Sources */,
 				C10000000000000000000104 /* WindowTabStrip.swift in Sources */,
 				C10000000000000000000103 /* ChromeHomeView.swift in Sources */,
 				C10000000000000000000102 /* ChromeLayout.swift in Sources */,
@@ -295,7 +303,7 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F10000000000000000000301 /* BrowserView.swift in Tests */, F10000000000000000000302 /* BrowserAddressLayoutTests.swift in Sources */, F10000000000000000000401 /* PerformanceBaselineTests.swift in Sources */, E30000000000000000000101 /* OrielPalette.swift in Tests */, C30000000000000000000105, C30000000000000000000104, C30000000000000000000103, C30000000000000000000102, C30000000000000000000101, B10000000000000000000033, B10000000000000000000034, B10000000000000000000029, B10000000000000000000031, B10000000000000000000024, B10000000000000000000030, B10000000000000000000023, B10000000000000000000008, B10000000000000000000022, B10000000000000000000021, B10000000000000000000006 /* WindowChromeLayoutTests.swift in Sources */, B10000000000000000000007 /* MiniWindowChromeView.swift in Sources */, B10000000000000000000001 /* NovelSessionTests.swift in Sources */, B10000000000000000000002 /* NovelSession.swift in Sources */, B10000000000000000000004 /* StockMarket.swift in Sources */, B10000000000000000000005 /* StockWatchlistTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		B30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D71D5E80602BB3FE55BA131A /* CloseGuard.swift in Tests */, D7DD09ECF9651FCB0F77D19C /* CloseGuardTests.swift in Tests */, F10000000000000000000301 /* BrowserView.swift in Tests */, F10000000000000000000302 /* BrowserAddressLayoutTests.swift in Sources */, F10000000000000000000401 /* PerformanceBaselineTests.swift in Sources */, E30000000000000000000101 /* OrielPalette.swift in Tests */, C30000000000000000000105, C30000000000000000000104, C30000000000000000000103, C30000000000000000000102, C30000000000000000000101, B10000000000000000000033, B10000000000000000000034, B10000000000000000000029, B10000000000000000000031, B10000000000000000000024, B10000000000000000000030, B10000000000000000000023, B10000000000000000000008, B10000000000000000000022, B10000000000000000000021, B10000000000000000000006 /* WindowChromeLayoutTests.swift in Sources */, B10000000000000000000007 /* MiniWindowChromeView.swift in Sources */, B10000000000000000000001 /* NovelSessionTests.swift in Sources */, B10000000000000000000002 /* NovelSession.swift in Sources */, B10000000000000000000004 /* StockMarket.swift in Sources */, B10000000000000000000005 /* StockWatchlistTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

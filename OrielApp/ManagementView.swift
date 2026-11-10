@@ -115,8 +115,12 @@ private struct ManagedWindowRow: View {
             }.padding(.vertical, 16)
             .alert("关闭\(window.name)？", isPresented: $closing) {
                 Button("取消", role: .cancel) {}
-                Button("关闭", role: .destructive) { window.close() }
-            } message: { Text("将关闭此窗口的所有页签并结束其中的终端会话，其他小窗不受影响。") }
+                // This alert is the confirmation, so it also covers running terminal commands.
+                Button("关闭", role: .destructive) { window.close(endingJobs: true) }
+            } message: {
+                Text((CloseGuard.message(busy: window.busyTerminalTitles).map { $0 + "\n\n" } ?? "")
+                     + "将关闭此窗口的所有页签并结束其中的终端会话，其他小窗不受影响。")
+            }
             .alert("重命名小窗", isPresented: $renaming) {
                 TextField("窗口名称", text: $nameDraft).accessibilityLabel("窗口名称")
                 Button("取消", role: .cancel) {}

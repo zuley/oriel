@@ -502,7 +502,41 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         activate(tab)
     }
 
+    /// Titles of terminal tabs whose shell is running a command.
+    var busyTerminalTitles: [String] {
+        CloseGuard.busyTitles(tabs.compactMap { tab in
+            tab.terminal.map { CloseGuard.Terminal(title: tab.title, busy: $0.hasForegroundJob) }
+        })
+    }
+
+    /// Ask before ending running commands. `proceed` runs only after confirmation.
+    func confirmEndingJobs(_ message: String, button: String, proceed: @escaping () -> Void) {
+        guard !isDisposed, attachedSheet == nil else { return }
+        let alert = NSAlert()
+        alert.messageText = "终端中有任务正在运行"
+        alert.informativeText = message
+        alert.addButton(withTitle: button)
+        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+        makeKeyAndOrderFront(nil)
+        alert.beginSheetModal(for: self) { response in
+            if response == .alertFirstButtonReturn { proceed() }
+        }
+    }
+
     private func closeTab(number: Int) {
+        guard canManageTabs, let tab = tabs.first(where: { $0.number == number }) else { return }
+        if tab.terminal?.hasForegroundJob == true,
+           let message = CloseGuard.message(busy: [tab.title]) {
+            confirmEndingJobs(message, button: "结束并关闭") { [weak self, weak tab] in
+                guard let self, let tab, self.canManageTabs else { return }
+                self.performCloseTab(number: tab.number)
+            }
+            return
+        }
+        performCloseTab(number: number)
+    }
+
+    private func performCloseTab(number: Int) {
         guard canManageTabs, let index = tabs.firstIndex(where: { $0.number == number }) else { return }
         let noteIDs = Set([tabs[index].notes?.document.id].compactMap { $0 })
         guard NotesWorkspace.shared.confirmCanClose(documentIDs: noteIDs) else { return }
