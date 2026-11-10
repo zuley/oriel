@@ -127,7 +127,7 @@ struct NovelView: View {
                         } else {
                             let books = library.recent.filter { filter.matches($0.title + ($0.author ?? "")) }
                             ForEach(books) { book in
-                                let progress = library.places.place(for: book.id)
+                                let progress = library.place(for: book.id)
                                 let detail = progress.updated == nil ? "\(book.chapterCount) 节" : "读到 \(progress.chapter + 1) / \(book.chapterCount)"
                                 row(title: book.title, detail: detail, mark: "chevron.right",
                                     color: color(book.sourceID ?? book.id.utf8.reduce(0) { $0 + Int($1) }), width: width) {

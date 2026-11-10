@@ -11,11 +11,36 @@ final class NovelLibrary: ObservableObject {
     let removedBook = PassthroughSubject<String, Never>()
     private var revision = 0
     private var lastActiveBookID: String?
+    /// Scroll positions not yet written to UserDefaults, newest per book.
+    private var pendingPlaces: [String: ReadingPlace] = [:]
+    private var placeFlush: Task<Void, Never>?
+    private let placeDelay: Duration
+    private var terminationObserver: NSObjectProtocol?
 
-    init(root: URL? = nil, defaults: UserDefaults = .standard) {
+    init(root: URL? = nil, defaults: UserDefaults = .standard, placeDelay: Duration = .seconds(1)) {
         places = ReadingPlaces(defaults: defaults)
+        self.placeDelay = placeDelay
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         shelf = NovelShelf(root: root ?? support.appending(path: Bundle.main.bundleIdentifier ?? "app.oriel.mac").appending(path: "Books"))
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.flushPlaces() }
+        }
+    }
+
+    /// The latest reading place, including a scroll position not yet written.
+    func place(for book: String) -> ReadingPlace {
+        pendingPlaces[book] ?? places.place(for: book)
+    }
+
+    /// Write every pending scroll position now (closing, hiding, quitting).
+    func flushPlaces() {
+        placeFlush?.cancel()
+        placeFlush = nil
+        let pending = pendingPlaces
+        pendingPlaces = [:]
+        for (book, place) in pending { places.save(book: book, chapter: place.chapter, offset: place.offset) }
     }
 
     func refresh() async throws {
@@ -26,12 +51,23 @@ final class NovelLibrary: ObservableObject {
     }
 
     func savePlace(book: String, chapter: Int, offset: Int) {
-        let previous = places.place(for: book)
-        places.save(book: book, chapter: chapter, offset: offset)
-        // The manager needs chapter/recent-order changes, not a redraw per scroll tick.
+        let previous = place(for: book)
+        // Chapter changes, first opens and switching books update shelf order and progress:
+        // write them at once. Scrolling within a chapter is written after a pause.
         if lastActiveBookID != book || previous.chapter != chapter || previous.updated == nil {
+            pendingPlaces[book] = nil
+            places.save(book: book, chapter: chapter, offset: offset)
             lastActiveBookID = book
             objectWillChange.send()
+            return
+        }
+        pendingPlaces[book] = ReadingPlace(chapter: chapter, offset: offset, updated: Date())
+        guard placeFlush == nil else { return }
+        let delay = placeDelay
+        placeFlush = Task { [weak self] in
+            do { try await Task.sleep(for: delay) } catch { return }
+            self?.placeFlush = nil
+            self?.flushPlaces()
         }
     }
 
@@ -46,12 +82,13 @@ final class NovelLibrary: ObservableObject {
     }
 
     var recent: [ShelfBook] {
-        books.map { (book: $0, date: places.place(for: $0.id).updated ?? $0.added) }
+        books.map { (book: $0, date: place(for: $0.id).updated ?? $0.added) }
             .sorted { $0.date > $1.date }.map(\.book)
     }
 
     func remove(_ book: ShelfBook) async throws {
         try await shelf.remove(book)
+        pendingPlaces[book.id] = nil
         places.remove(book: book.id)
         removedBook.send(book.id)
         try await refresh()
@@ -181,7 +218,7 @@ final class NovelSession: ObservableObject {
         let text = try await library.shelf.chapters(of: saved)
         try await library.refresh()
         try Task.checkCancellation()
-        let place = library.places.place(for: saved.id)
+        let place = library.place(for: saved.id)
         highlight = nil
         book = saved
         chapters = text
@@ -234,6 +271,7 @@ final class NovelSession: ObservableObject {
     }
 
     func showShelf() {
+        library.flushPlaces()
         book = nil
         chapters = []
         section = .shelf
@@ -273,6 +311,7 @@ final class NovelSession: ObservableObject {
     }
 
     func dispose() {
+        library.flushPlaces()
         cancel()
         onBookChanged = nil
         confirmationTask?.cancel()

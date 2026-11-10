@@ -33,7 +33,7 @@ final class NovelSessionTests: XCTestCase {
         let observation = library.objectWillChange.sink { changes += 1 }
         reader.turn(to: 1)
         XCTAssertGreaterThan(changes, 0)
-        XCTAssertEqual(library.places.place(for: book.id).chapter, 1)
+        XCTAssertEqual(library.place(for: book.id).chapter, 1)
         withExtendedLifetime(observation) {}
     }
 
@@ -65,7 +65,7 @@ final class NovelSessionTests: XCTestCase {
         XCTAssertEqual(first.section, .shelf)
         XCTAssertEqual(other.section, .shelf)
         XCTAssertTrue(library.books.isEmpty)
-        XCTAssertNil(library.places.place(for: book.id).updated)
+        XCTAssertNil(library.place(for: book.id).updated)
         XCTAssertTrue(library.places.marks(for: book.id).isEmpty)
     }
 
@@ -117,6 +117,62 @@ final class NovelSessionTests: XCTestCase {
         try await settle(reopened)
         XCTAssertEqual(reopened.chapter, 1)
         XCTAssertEqual(reopened.offset, 4)
+    }
+
+    // R03: scrolling no longer writes UserDefaults on every position change.
+    private func storedOffset(_ defaults: UserDefaults, _ book: String) -> Int? {
+        defaults.dictionary(forKey: "novel.place.v1." + book)?["offset"] as? Int
+    }
+
+    func testScrollingWithinAChapterWritesThePlaceOnceAfterAPause() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { try? FileManager.default.removeItem(at: folder); defaults.removePersistentDomain(forName: suite) }
+        let library = NovelLibrary(root: folder, defaults: defaults, placeDelay: .milliseconds(200))
+        let book = try await library.shelf.add(data: Data(("第一章\n" + String(repeating: "长段落。", count: 400)).utf8), name: "滚动.txt")
+        let reader = NovelSession(library: library)
+        reader.open(book)
+        try await settle(reader)
+        XCTAssertEqual(storedOffset(defaults, book.id), 0)
+
+        for position in 1...100 { reader.saveOffset(position * 3, bookID: book.id, index: 0) }
+        XCTAssertEqual(storedOffset(defaults, book.id), 0, "Scrolling must not write on every step.")
+        XCTAssertEqual(library.place(for: book.id).offset, 300, "Readers still see the latest place.")
+        try await waitUntil { self.storedOffset(defaults, book.id) == 300 }
+    }
+
+    func testChapterChangesAndClosingWriteThePlaceImmediately() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { try? FileManager.default.removeItem(at: folder); defaults.removePersistentDomain(forName: suite) }
+        let library = NovelLibrary(root: folder, defaults: defaults, placeDelay: .seconds(60))
+        let book = try await library.shelf.add(data: Data("第一章\n出发了很久很久。\n第二章\n到了。".utf8), name: "换章.txt")
+        let reader = NovelSession(library: library)
+        reader.open(book)
+        try await settle(reader)
+
+        reader.saveOffset(4, bookID: book.id, index: 0)
+        reader.turn(to: 1)
+        XCTAssertEqual(defaults.dictionary(forKey: "novel.place.v1." + book.id)?["chapter"] as? Int, 1)
+
+        reader.saveOffset(2, bookID: book.id, index: 1)
+        reader.showShelf()
+        XCTAssertEqual(storedOffset(defaults, book.id), 2)
+
+        reader.open(book)
+        try await settle(reader)
+        reader.saveOffset(1, bookID: book.id, index: 1)
+        reader.dispose()
+        XCTAssertEqual(storedOffset(defaults, book.id), 1)
+
+        let other = NovelSession(library: library)
+        other.open(book)
+        try await settle(other)
+        other.saveOffset(3, bookID: book.id, index: 1)
+        library.flushPlaces()
+        XCTAssertEqual(storedOffset(defaults, book.id), 3)
     }
 
     private func settle(_ session: NovelSession) async throws {

@@ -237,6 +237,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         watchlist.setVisible(state.isVisible && selected.page == .stocks, owner: watchlistOwner)
         if !state.isVisible { chrome?.dismissTooltip() }
         if state.isLocked || !state.isVisible {
+            novelLibrary.flushPlaces()
             if let sheet = attachedSheet { endSheet(sheet, returnCode: .cancel) }
             hoveredResizeHandle?.releaseCursor()
             stockChart.dismiss()

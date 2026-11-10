@@ -4,6 +4,12 @@ public struct ReadingPlace: Sendable {
     public var chapter: Int
     public var offset: Int
     public var updated: Date?
+
+    public init(chapter: Int, offset: Int, updated: Date?) {
+        self.chapter = chapter
+        self.offset = offset
+        self.updated = updated
+    }
 }
 
 public struct ReadingMark: Identifiable, Equatable, Codable, Sendable {
