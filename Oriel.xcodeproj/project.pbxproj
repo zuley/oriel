@@ -70,6 +70,9 @@ A10000000000000000000030 = {isa = PBXBuildFile; fileRef = A200000000000000000000
 		D7AEB904D1804E6264237124 /* EditingShortcutsTests.swift in Tests */ = {isa = PBXBuildFile; fileRef = D7D5D32760D856CA71C20C66 /* EditingShortcutsTests.swift */; };
 		D7C63CAE997E1EC914D7EEC6 /* EditingShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7D92A5D6D725084CC58C403 /* EditingShortcuts.swift */; };
 		D78D203D879B9CF8FC065335 /* EditingShortcuts.swift in Tests */ = {isa = PBXBuildFile; fileRef = D7D92A5D6D725084CC58C403 /* EditingShortcuts.swift */; };
+		D7D33F9F6676C990FA630925 /* PanelFrameViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7D01A9B5EDACB3149CF16BB /* PanelFrameViews.swift */; };
+		D79976B5E65244A01B22BAA5 /* LockRecoveryPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D779817268130B992EC5BF24 /* LockRecoveryPanel.swift */; };
+		D73A59187B1AA374B54FBBD2 /* WindowSettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D725D7DDD1638AD8576DE34D /* WindowSettingsPanel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -119,6 +122,9 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		D731A3DE63FDC5A98ADF1568 /* CloseGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloseGuard.swift; sourceTree = "<group>"; };
 		D7D5D32760D856CA71C20C66 /* EditingShortcutsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditingShortcutsTests.swift; sourceTree = "<group>"; };
 		D7D92A5D6D725084CC58C403 /* EditingShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditingShortcuts.swift; sourceTree = "<group>"; };
+		D7D01A9B5EDACB3149CF16BB /* PanelFrameViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelFrameViews.swift; sourceTree = "<group>"; };
+		D779817268130B992EC5BF24 /* LockRecoveryPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockRecoveryPanel.swift; sourceTree = "<group>"; };
+		D725D7DDD1638AD8576DE34D /* WindowSettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSettingsPanel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -145,6 +151,9 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		A40000000000000000000002 /* OrielApp */ = {
 			isa = PBXGroup;
 			children = (
+				D725D7DDD1638AD8576DE34D /* WindowSettingsPanel.swift */,
+				D779817268130B992EC5BF24 /* LockRecoveryPanel.swift */,
+				D7D01A9B5EDACB3149CF16BB /* PanelFrameViews.swift */,
 				D7D92A5D6D725084CC58C403 /* EditingShortcuts.swift */,
 				D731A3DE63FDC5A98ADF1568 /* CloseGuard.swift */,
 				C20000000000000000000105 /* WindowTabStrip.swift */,
@@ -281,6 +290,9 @@ A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D73A59187B1AA374B54FBBD2 /* WindowSettingsPanel.swift in Sources */,
+				D79976B5E65244A01B22BAA5 /* LockRecoveryPanel.swift in Sources */,
+				D7D33F9F6676C990FA630925 /* PanelFrameViews.swift in Sources */,
 				D7C63CAE997E1EC914D7EEC6 /* EditingShortcuts.swift in Sources */,
 				D7F99E7D01FFA6B53D0D73A9 /* CloseGuard.swift in Sources */,
 				C10000000000000000000104 /* WindowTabStrip.swift in Sources */,
