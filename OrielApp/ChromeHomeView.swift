@@ -48,7 +48,7 @@ final class ChromeHomeView: NSView {
     private static let margin: CGFloat = 12
 
     private var tiles: [(kind: PageKind, button: HomeTileButton)] = []
-    private let prompt = ChromeHomeView.label("选择要打开的内容", size: 12)
+    private let welcome = ChromeHomeView.welcomeLabel()
     private var backgroundOpacity: CGFloat = 1
 
     override var isFlipped: Bool { true }
@@ -62,20 +62,23 @@ final class ChromeHomeView: NSView {
             addSubview(button)
             tiles.append((kind, button))
         }
-        addSubview(prompt)
+        addSubview(welcome)
         registerForDraggedTypes([.fileURL])
         setActionsEnabled(true)
     }
 
     required init?(coder: NSCoder) { nil }
 
-    private static func label(_ text: String, size: CGFloat, weight: NSFont.Weight = .regular) -> NSTextField {
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: size, weight: weight)
-        label.textColor = ChromePalette.secondary
-        label.alignment = .center
-        label.lineBreakMode = .byTruncatingTail
-        return label
+    private static func welcomeLabel() -> NSTextField {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineSpacing = 3
+        let font = NSFont(name: "STSongti-SC-Regular", size: 22)
+            ?? .systemFont(ofSize: 22)
+        let text = NSAttributedString(string: "每有会意，\n便欣然忘食。", attributes: [
+            .font: font, .foregroundColor: ChromePalette.ink, .paragraphStyle: paragraph
+        ])
+        return NSTextField(labelWithAttributedString: text)
     }
 
     func setBackgroundOpacity(_ background: CGFloat) {
@@ -135,7 +138,7 @@ final class ChromeHomeView: NSView {
 
     /// One centered row of icons, for the smallest windows.
     private func layoutCompact() {
-        prompt.isHidden = true
+        welcome.isHidden = true
         let count = CGFloat(tiles.count)
         let side = min(40, bounds.height, max(0, bounds.width - 6) / count)
         let total = count * side + 2 * (count - 1)
@@ -146,25 +149,25 @@ final class ChromeHomeView: NSView {
         }
     }
 
-    /// Three-column launcher grid, with its prompt centered as one block.
+    /// Center the welcome text and launcher grid as one block.
     private func layoutLauncher() {
         let margin = Self.margin
         let columns = 3
         let rowCount = Int((CGFloat(tiles.count) / CGFloat(columns)).rounded(.up))
         let tileWidth = min(76, (bounds.width - 2 * margin - CGFloat(columns - 1) * Self.tileGap) / CGFloat(columns))
         let gridHeight = CGFloat(rowCount) * Self.tileHeight + CGFloat(rowCount - 1) * Self.tileGap
-        let promptHeight: CGFloat = 16
-        let promptGap: CGFloat = 10
+        let welcomeHeight = ceil(welcome.intrinsicContentSize.height)
+        let welcomeGap: CGFloat = 14
         let available = bounds.height - 2 * margin
 
-        let showPrompt = gridHeight + promptHeight + promptGap <= available
-        let total = gridHeight + (showPrompt ? promptHeight + promptGap : 0)
+        let showWelcome = gridHeight + welcomeHeight + welcomeGap <= available
+        let total = gridHeight + (showWelcome ? welcomeHeight + welcomeGap : 0)
         var y = max(margin, (bounds.height - total) / 2)
 
-        prompt.isHidden = !showPrompt
-        if showPrompt {
-            prompt.frame = NSRect(x: margin, y: y, width: bounds.width - 2 * margin, height: promptHeight)
-            y += promptHeight + promptGap
+        welcome.isHidden = !showWelcome
+        if showWelcome {
+            welcome.frame = NSRect(x: margin, y: y, width: bounds.width - 2 * margin, height: welcomeHeight)
+            y += welcomeHeight + welcomeGap
         }
         // A partial last row is centered on its own, not left-aligned in a full-width grid.
         for row in 0..<rowCount {
