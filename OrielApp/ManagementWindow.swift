@@ -14,6 +14,7 @@ final class ManagementState: ObservableObject {
         }
     }
     @Published var section: Section = .workspace
+    @Published var isPresented = false
 }
 
 @MainActor
@@ -41,6 +42,7 @@ final class ManagementWindow: NSWindowController, NSWindowDelegate {
 
     func present(section: ManagementState.Section? = nil) {
         if let section { state.section = section }
+        state.isPresented = true
         NSApp.setActivationPolicy(.regular)
         window?.deminiaturize(nil)
         showWindow(nil)
@@ -49,11 +51,16 @@ final class ManagementWindow: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        state.isPresented = false
         model?.clearWindowHover()
         NSApp.setActivationPolicy(.accessory)
     }
 
     func windowDidResignKey(_ notification: Notification) { model?.clearWindowHover() }
-    func windowWillMiniaturize(_ notification: Notification) { model?.clearWindowHover() }
+    func windowWillMiniaturize(_ notification: Notification) {
+        state.isPresented = false
+        model?.clearWindowHover()
+    }
+    func windowDidDeminiaturize(_ notification: Notification) { state.isPresented = true }
 
 }

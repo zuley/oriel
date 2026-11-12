@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 struct ManagementView: View {
@@ -23,6 +24,7 @@ struct ManagementView: View {
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: 34)
                             .foregroundStyle(section == state.section ? accent : OrielPalette.text)
                             .background(section == state.section ? Color(nsColor: OrielPalette.selection) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                            .contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityAddTraits(section == state.section ? .isSelected : [])
                 }
                 Spacer()
@@ -37,7 +39,7 @@ struct ManagementView: View {
                 }
                 Group {
                     switch state.section {
-                    case .workspace: WorkspaceManagementView(model: model)
+                    case .workspace: WorkspaceManagementView(model: model, isPresented: state.isPresented)
                     case .settings: ManagementSettingsView(settings: model.preferences, model: model)
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -49,6 +51,7 @@ struct ManagementView: View {
 
 private struct WorkspaceManagementView: View {
     @ObservedObject var model: AppModel
+    let isPresented: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -61,16 +64,21 @@ private struct WorkspaceManagementView: View {
             if model.windows.isEmpty {
                 ManagementEmptyView(icon: "rectangle.on.rectangle", title: "还没有小窗", detail: "创建小窗后，在小窗中添加和使用内容。") { EmptyView() }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(model.windows) { window in
-                            ManagedWindowRow(window: window)
-                                .contentShape(Rectangle())
-                                .onHover { model.hoverWindow(window.id, inside: $0) }
-                                .onDisappear { model.hoverWindow(window.id, inside: false) }
-                            Divider()
+                GeometryReader { viewport in
+                    ScrollView([.vertical, .horizontal]) {
+                        ThumbnailFlowLayout(spacing: 20, wrapWidth: viewport.size.width) {
+                            ForEach(model.windows) { window in
+                                ManagedWindowThumbnail(window: window, isPresented: isPresented,
+                                                       viewportSize: viewport.size)
+                                    .contentShape(Rectangle())
+                                    .onHover { model.hoverWindow(window.id, inside: $0) }
+                                    .onDisappear { model.hoverWindow(window.id, inside: false) }
+                            }
                         }
-                    }
+                        .padding(.bottom, 8)
+                        .frame(minWidth: viewport.size.width, minHeight: viewport.size.height,
+                               alignment: .topLeading)
+                    }.coordinateSpace(name: "thumbnailViewport")
                 }
             }
         }.font(.system(size: 12))
@@ -78,41 +86,87 @@ private struct WorkspaceManagementView: View {
     }
 }
 
-private struct ManagedWindowRow: View {
+private struct ThumbnailFlowLayout: Layout {
+    let spacing: CGFloat
+    let wrapWidth: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrangement(for: subviews)
+        return CGSize(width: max(proposal.width ?? 0, result.size.width), height: result.size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrangement(for: subviews)
+        for (subview, point) in zip(subviews, result.positions) {
+            subview.place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y),
+                          proposal: .unspecified)
+        }
+    }
+
+    private func arrangement(for subviews: Subviews) -> (positions: [CGPoint], size: CGSize) {
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var widest: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > max(wrapWidth, 1) {
+                y += rowHeight + spacing
+                x = 0
+                rowHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            widest = max(widest, x + size.width)
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return (positions, CGSize(width: max(wrapWidth, widest), height: y + rowHeight))
+    }
+}
+
+private struct ManagedWindowThumbnail: View {
     @ObservedObject var window: MiniWindowSession
+    let isPresented: Bool
+    let viewportSize: CGSize
+    private let refresh = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    @State private var isInViewport = false
     @State private var closing = false
     @State private var renaming = false
     @State private var nameDraft = ""
     var body: some View {
         if let snapshot = window.snapshot {
-            HStack(spacing: 12) {
-                Image(systemName: "macwindow").font(.system(size: 22, weight: .light)).foregroundStyle(OrielPalette.mutedText)
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 6) {
-                        Text(window.name).font(.system(size: 14, weight: .medium))
-                            .lineLimit(1).truncationMode(.tail).help(window.name)
-                        Button {
-                            nameDraft = window.name
-                            renaming = true
-                        } label: {
-                            Image(systemName: "pencil").font(.system(size: 11)).foregroundStyle(OrielPalette.mutedText)
-                                .frame(width: 20, height: 20).contentShape(Rectangle())
-                        }.buttonStyle(.plain).help("重命名")
-                            .accessibilityLabel("重命名 \(window.name)")
-                    }
-                    HStack(spacing: 6) {
-                        Circle().fill(snapshot.isVisible ? Color.green : Color.gray).frame(width: 6, height: 6)
-                        Text(snapshot.isVisible ? "已显示" : "已隐藏").foregroundStyle(OrielPalette.mutedText)
-                    }
-                }
-                Spacer()
+            Button { window.showFromWorkspace() } label: {
+                WindowThumbnail(windowSize: snapshot.frame.size, image: window.thumbnail)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .help(window.name)
+            .accessibilityLabel(window.name)
+            .contextMenu {
                 Button(snapshot.isVisible ? "隐藏" : "显示") {
                     if snapshot.isVisible { window.hide() }
-                    else if window.needsTransparencyRecovery { window.findWindow() }
-                    else { window.recover() }
-                }.accessibilityLabel("\(snapshot.isVisible ? "隐藏" : "显示") \(window.name)")
-                Button("关闭") { closing = true }.accessibilityLabel("关闭 \(window.name)")
-            }.padding(.vertical, 16)
+                    else { window.showFromWorkspace() }
+                }
+                Button("重命名") {
+                    nameDraft = window.name
+                    renaming = true
+                }
+                Divider()
+                Button("关闭", role: .destructive) { closing = true }
+            }
+            .onGeometryChange(for: Bool.self) { geometry in
+                geometry.frame(in: .named("thumbnailViewport"))
+                    .intersects(CGRect(origin: .zero, size: viewportSize))
+            } action: { visible in
+                isInViewport = visible
+                if visible && isPresented { window.refreshThumbnail() }
+            }
+            .onReceive(refresh) { _ in if isPresented && isInViewport { window.refreshThumbnail() } }
+            .onChange(of: isPresented) { _, visible in
+                if visible && isInViewport { window.refreshThumbnail() }
+            }
             .alert("关闭\(window.name)？", isPresented: $closing) {
                 Button("取消", role: .cancel) {}
                 // This alert is the confirmation, so it also covers running terminal commands.
@@ -128,6 +182,28 @@ private struct ManagedWindowRow: View {
                     .disabled(MiniWindowSession.validatedName(nameDraft) == nil)
             } message: { Text("最多 32 个字") }
         }
+    }
+}
+
+private struct WindowThumbnail: View {
+    let windowSize: CGSize
+    let image: NSImage?
+    private let height: CGFloat = 220
+
+    private var width: CGFloat {
+        height * max(windowSize.width, 1) / max(windowSize.height, 1)
+    }
+
+    var body: some View {
+        ZStack {
+            Color(nsColor: OrielPalette.surface)
+            if let image {
+                Image(nsImage: image).resizable().interpolation(.high).scaledToFit()
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: OrielPalette.divider), lineWidth: 1) }
     }
 }
 

@@ -8,6 +8,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     let number: Int
     @Published private(set) var name: String
     @Published private(set) var snapshot: WindowSnapshot?
+    @Published private(set) var thumbnail: NSImage?
     @Published private(set) var needsTransparencyRecovery = false
     private let group: WindowGroupController
     private let onClose: (UUID) -> Void
@@ -106,7 +107,10 @@ final class MiniWindowSession: ObservableObject, Identifiable {
         field.selectText(nil)
     }
 
-    func applyDefaults(_ preferences: AppPreferences) { panel?.applyDefaults(preferences) }
+    func applyDefaults(_ preferences: AppPreferences) {
+        panel?.applyDefaults(preferences)
+        if snapshot?.isVisible == false { refreshThumbnail(includeHidden: true) }
+    }
     func setEmphasis(_ emphasis: WindowGroupController.Emphasis) { panel?.setEmphasis(emphasis) }
     func containsNote(_ id: UUID) -> Bool { panel?.containsNote(id) ?? false }
     func revealNote(_ id: UUID) {
@@ -144,6 +148,35 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     func findWindow() { recover(); panel?.revealTransparencySettings() }
     func hide() { group.send(.hide, to: id); synchronize() }
 
+    func showFromWorkspace() {
+        if needsTransparencyRecovery && snapshot?.isVisible == false { findWindow() }
+        else if snapshot?.isVisible == false { recover() }
+        else { panel?.orderFrontRegardless() }
+    }
+
+    func refreshThumbnail(includeHidden: Bool = false) {
+        guard let panel, (panel.isVisible || includeHidden), !panel.isDisposed,
+              snapshot?.isFolded != true else { return }
+        guard let view = panel.chrome else { return }
+        if includeHidden { view.layoutSubtreeIfNeeded() }
+        let bounds = view.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+        let scale = min(2, 768 / bounds.width, 440 / bounds.height)
+        let pixelWidth = max(1, Int((bounds.width * scale).rounded()))
+        let pixelHeight = max(1, Int((bounds.height * scale).rounded()))
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                            pixelsWide: pixelWidth, pixelsHigh: pixelHeight,
+                                            bitsPerSample: 8, samplesPerPixel: 4,
+                                            hasAlpha: true, isPlanar: false,
+                                            colorSpaceName: .deviceRGB,
+                                            bytesPerRow: 0, bitsPerPixel: 0) else { return }
+        bitmap.size = bounds.size
+        view.cacheDisplay(in: bounds, to: bitmap)
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(bitmap)
+        thumbnail = image
+    }
+
     var busyTerminalTitles: [String] { panel?.busyTerminalTitles ?? [] }
 
     /// `endingJobs`: the user already agreed to end running terminal commands
@@ -169,6 +202,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
         group.send(.close, to: id)
         panel?.dispose()
         panel = nil
+        thumbnail = nil
         needsTransparencyRecovery = false
         synchronize()
         onClose(id)
@@ -176,6 +210,10 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     private func synchronize() {
         let current = group.snapshot(for: id)
         if snapshot != current {
+            if let previous = snapshot, let current,
+               (previous.isVisible && !current.isVisible || !previous.isFolded && current.isFolded) {
+                refreshThumbnail()
+            }
             if let current { panel?.apply(current) }
             snapshot = current
             onStateChange()
