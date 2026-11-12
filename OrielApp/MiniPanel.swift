@@ -9,6 +9,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         let toggleLock: () -> Void
         let unlock: () -> Void
         let toggleAutomaticHiding: () -> Void
+        var toggleAllSpaces: () -> Void = {}
         let recover: () -> Void
         let hide: () -> Void
         let close: () -> Void
@@ -42,6 +43,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     weak var hoveredResizeHandle: PanelResizeHandle?
     private var lockRecoveryPanel: LockRecoveryPanel?
     private let settingsPanel = WindowSettingsPanel()
+    private var settingsCloseTimer: Timer?
     private var backgroundOpacity: Double = 0.75
     private var emphasis: WindowGroupController.Emphasis = .normal
     private var contentOpacity: Double = 0.75
@@ -92,7 +94,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         becomesKeyOnlyIfNeeded = true
         hidesOnDeactivate = false
         level = .statusBar
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        collectionBehavior = [.stationary, .fullScreenAuxiliary]
         isMovable = true
         isMovableByWindowBackground = false
         acceptsMouseMovedEvents = true
@@ -117,8 +119,10 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             },
             renameWindow: actions.renameWindow,
             windowSettings: { [weak self] sender in self?.showSettings(from: sender) },
+            settingsHover: { [weak self] entered in self?.settingsHoverChanged(entered) },
             toggleFolding: actions.toggleAutomaticFolding,
             toggleAutomaticHiding: actions.toggleAutomaticHiding,
+            toggleAllSpaces: actions.toggleAllSpaces,
             toggleLock: actions.toggleLock,
             hide: actions.hide,
             close: actions.close,
@@ -155,6 +159,16 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
 
     override var canBecomeKey: Bool { !ignoresMouseEvents }
     override var canBecomeMain: Bool { false }
+
+    func setAppearsOnAllSpaces(_ enabled: Bool) {
+        guard !isDisposed else { return }
+        var behavior = collectionBehavior
+        if enabled { behavior.insert(.canJoinAllSpaces) }
+        else { behavior.remove(.canJoinAllSpaces) }
+        collectionBehavior = behavior
+        chrome.setAppearsOnAllSpaces(enabled)
+        lockRecoveryPanel?.collectionBehavior = behavior
+    }
 
     func setWindowName(_ name: String) {
         title = "Oriel · \(name)"
@@ -220,6 +234,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     func dispose() {
         guard !isDisposed else { return }
         isDisposed = true
+        cancelSettingsClose()
         noteChanges = nil
         if let sheet = attachedSheet { endSheet(sheet, returnCode: .cancel) }
         NotificationCenter.default.removeObserver(self, name: NSMenu.didBeginTrackingNotification, object: nil)
@@ -358,6 +373,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             }
         }
         guard let recovery = lockRecoveryPanel else { return }
+        recovery.collectionBehavior = collectionBehavior
         positionLockRecovery()
         recovery.alphaValue = alphaValue
         recovery.button.restingOpacity = backgroundOpacity
@@ -416,22 +432,63 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     func revealTransparencySettings() {
         revealingToolbar = true
         applyTransparency()
-        settingsPanel.onDismiss = { [weak self] in
-            guard let self, !isDisposed else { return }
-            revealingToolbar = false
-            applyTransparency()
-        }
         if !settingsPanel.isVisible { showSettings(from: chrome.windowButton) }
     }
 
-    /// The slider button opens the two opacity sliders directly, with no menu in between.
+    private func settingsHoverChanged(_ entered: Bool) {
+        if entered {
+            cancelSettingsClose()
+            showSettings(from: chrome.windowButton)
+        } else {
+            scheduleSettingsClose()
+        }
+    }
+
+    private func cancelSettingsClose() {
+        settingsCloseTimer?.invalidate()
+        settingsCloseTimer = nil
+    }
+
+    private func scheduleSettingsClose() {
+        guard settingsPanel.isVisible else { return }
+        cancelSettingsClose()
+        let timer = Timer(timeInterval: 0.18, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.settingsPanel.isVisible else { return }
+                self.settingsCloseTimer = nil
+                if NSEvent.pressedMouseButtons != 0 {
+                    self.scheduleSettingsClose()
+                    return
+                }
+                let pointer = NSEvent.mouseLocation
+                let button = self.chrome.windowButton
+                let buttonFrame = self.convertToScreen(button.convert(button.bounds, to: nil))
+                if !buttonFrame.insetBy(dx: -4, dy: -6).contains(pointer)
+                    && !self.settingsPanel.frame.insetBy(dx: -4, dy: -6).contains(pointer) {
+                    self.settingsPanel.performClose(nil)
+                }
+            }
+        }
+        settingsCloseTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    /// Hovering the settings icon opens the two opacity sliders.
     private func showSettings(from sender: NSView) {
         guard !isDisposed, currentState?.isLocked != true else { return }
-        if settingsPanel.isVisible {
-            settingsPanel.performClose(nil)
-            return
-        }
+        cancelSettingsClose()
+        guard !settingsPanel.isVisible else { return }
         chrome.dismissTooltip()
+        settingsPanel.onPointerEntered = { [weak self] in self?.cancelSettingsClose() }
+        settingsPanel.onPointerExited = { [weak self] in self?.scheduleSettingsClose() }
+        settingsPanel.onDismiss = { [weak self] in
+            guard let self else { return }
+            self.cancelSettingsClose()
+            self.chrome.setSettingsPanelOpen(false)
+            guard !self.isDisposed else { return }
+            self.revealingToolbar = false
+            self.applyTransparency()
+        }
         settingsPanel.contentViewController = WindowSettingsController(
             background: backgroundOpacity,
             content: contentOpacity,
@@ -443,7 +500,12 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
                 self.actions.transparencyRecoveryChanged(max(background, content) <= 0.05)
             }
         )
+        // Recovery may open settings while its toolbar button is still tucked away.
+        // Lay out the expanded controls before using that button as the anchor.
+        chrome.setSettingsPanelOpen(true)
+        chrome.layoutSubtreeIfNeeded()
         settingsPanel.show(below: sender)
+        if !settingsPanel.isVisible { chrome.setSettingsPanelOpen(false) }
     }
 
 }

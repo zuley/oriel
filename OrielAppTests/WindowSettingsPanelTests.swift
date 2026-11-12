@@ -50,14 +50,20 @@ final class WindowSettingsPanelTests: XCTestCase {
         var dismissals = 0
         for _ in 0..<2 {
             panel.onDismiss = { dismissals += 1 }
+            let priorKeyWindow = NSApp.keyWindow
             panel.show(below: anchor)
-            _ = try controls(in: try XCTUnwrap(panel.contentViewController?.view))
+            XCTAssertTrue(NSApp.keyWindow === priorKeyWindow,
+                          "Showing settings on hover must preserve the editing window's keyboard focus.")
+            let contentView = try XCTUnwrap(panel.contentViewController?.view)
+            _ = try controls(in: contentView)
+            XCTAssertEqual(contentView.trackingAreas.filter { $0.owner === panel }.count, 1)
             XCTAssertFalse(panel.isOpaque)
             XCTAssertEqual(panel.backgroundColor, .clear)
             XCTAssertEqual(panel.alphaValue, 1, "Even zero-opacity owners must leave settings usable.")
             XCTAssertTrue(panel.hasShadow)
             XCTAssertTrue(panel.parent === owner)
             panel.performClose(nil)
+            XCTAssertTrue(contentView.trackingAreas.filter { $0.owner === panel }.isEmpty)
             XCTAssertNil(panel.parent)
             XCTAssertFalse(panel.isVisible)
         }
@@ -85,4 +91,5 @@ final class WindowSettingsPanelTests: XCTestCase {
         XCTAssertEqual(changes.last?.0, 1)
         XCTAssertEqual(changes.last?.1, 0)
     }
+
 }

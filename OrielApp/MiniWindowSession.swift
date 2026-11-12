@@ -10,6 +10,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     @Published private(set) var snapshot: WindowSnapshot?
     @Published private(set) var thumbnail: NSImage?
     @Published private(set) var needsTransparencyRecovery = false
+    @Published private(set) var appearsOnAllSpaces = false
     private let group: WindowGroupController
     private let onClose: (UUID) -> Void
     private let onStateChange: () -> Void
@@ -45,6 +46,10 @@ final class MiniWindowSession: ObservableObject, Identifiable {
             toggleAutomaticHiding: { [weak self] in
                 guard let self else { return }
                 self.setAutomaticHiding(!(self.snapshot?.automaticHiding ?? false))
+            },
+            toggleAllSpaces: { [weak self] in
+                guard let self else { return }
+                self.setAppearsOnAllSpaces(!self.appearsOnAllSpaces)
             },
             recover: { [weak self] in self?.recover() },
             hide: { [weak self] in self?.hide() },
@@ -134,6 +139,11 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     }
 
     func setLocked(_ locked: Bool) { group.send(.setLocked(locked), to: id); synchronize() }
+    func setAppearsOnAllSpaces(_ enabled: Bool) {
+        guard let panel, appearsOnAllSpaces != enabled else { return }
+        panel.setAppearsOnAllSpaces(enabled)
+        appearsOnAllSpaces = enabled
+    }
     func setAutomaticHiding(_ enabled: Bool) {
         group.send(.automaticHiding(enabled, pointer: NSEvent.mouseLocation), to: id)
         synchronize()

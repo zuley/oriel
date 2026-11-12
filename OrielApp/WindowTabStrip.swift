@@ -6,9 +6,12 @@ import AppKit
 final class WindowTabStrip: NSView {
     private static let spacing: CGFloat = 2
     private static let overflowWidth: CGFloat = 26
+    private static let addWidth: CGFloat = 22
 
     private let selectTab: (Int) -> Void
     private let closeTab: (Int) -> Void
+    private let addTab: () -> Void
+    private let addButton = NSButton()
     private let overflow = NSButton()
     private var chips: [TabChip] = []
     private var selectedNumber = 0
@@ -17,10 +20,22 @@ final class WindowTabStrip: NSView {
 
     override var isFlipped: Bool { true }
 
-    init(select: @escaping (Int) -> Void, close: @escaping (Int) -> Void) {
+    init(select: @escaping (Int) -> Void, close: @escaping (Int) -> Void,
+         add: @escaping () -> Void) {
         selectTab = select
         closeTab = close
+        addTab = add
         super.init(frame: .zero)
+        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "新建页签")?
+            .withSymbolConfiguration(.init(pointSize: 11, weight: .medium))
+        addButton.imagePosition = .imageOnly
+        addButton.isBordered = false
+        addButton.contentTintColor = ChromePalette.secondary
+        addButton.toolTip = "新建页签"
+        addButton.setAccessibilityLabel("新建页签")
+        addButton.target = self
+        addButton.action = #selector(addPressed)
+        addSubview(addButton)
         overflow.image = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: "全部页签")?
             .withSymbolConfiguration(.init(pointSize: 11, weight: .medium))
         overflow.imagePosition = .imageOnly
@@ -52,6 +67,7 @@ final class WindowTabStrip: NSView {
 
     func setEnabled(_ enabled: Bool) {
         self.enabled = enabled
+        addButton.isEnabled = enabled
         overflow.isEnabled = enabled
         for chip in chips { chip.setEnabled(enabled) }
     }
@@ -59,17 +75,20 @@ final class WindowTabStrip: NSView {
     override func layout() {
         super.layout()
         guard let selected = chips.firstIndex(where: { $0.number == selectedNumber }) else {
+            addButton.isHidden = true
             overflow.isHidden = true
             return
         }
+        addButton.isHidden = false
         let spacing = Self.spacing
         let widths = chips.map(\.preferredWidth)
         let total = widths.reduce(0, +) + spacing * CGFloat(chips.count - 1)
+        let tabSpace = max(0, bounds.width - Self.addWidth - spacing)
         var visible = Set(chips.indices)
         var selectedWidth = widths[selected]
-        if total > bounds.width {
+        if total > tabSpace {
             // Keep the selected tab and as many neighbours as fit; the rest are in the menu.
-            let available = bounds.width - Self.overflowWidth
+            let available = max(0, tabSpace - Self.overflowWidth - spacing)
             selectedWidth = min(widths[selected], max(0, available))
             visible = [selected]
             var remaining = available - selectedWidth
@@ -93,8 +112,12 @@ final class WindowTabStrip: NSView {
         overflow.isHidden = visible.count == chips.count
         overflow.frame = NSRect(x: bounds.width - Self.overflowWidth, y: 0,
                                 width: Self.overflowWidth, height: bounds.height - 1)
+        let addLimit = (overflow.isHidden ? bounds.width : overflow.frame.minX - spacing) - Self.addWidth
+        addButton.frame = NSRect(x: min(x, addLimit), y: 0,
+                                 width: Self.addWidth, height: bounds.height - 1)
     }
 
+    @objc private func addPressed() { addTab() }
     @objc private func overflowPressed() { onOverflow?(overflow) }
 }
 

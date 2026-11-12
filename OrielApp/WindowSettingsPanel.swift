@@ -4,6 +4,9 @@ import AppKit
 @MainActor
 final class WindowSettingsPanel: NSPanel {
     var onDismiss: (() -> Void)?
+    var onPointerEntered: (() -> Void)?
+    var onPointerExited: (() -> Void)?
+    private var pointerTracking: NSTrackingArea?
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var activationObserver: NSObjectProtocol?
@@ -36,8 +39,14 @@ final class WindowSettingsPanel: NSPanel {
         if y < screen.minY + 4 { y = anchorFrame.maxY + 4 }
         y = min(max(y, screen.minY + 4), screen.maxY - size.height - 4)
         setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: false)
+        let tracking = NSTrackingArea(rect: .zero,
+                                      options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                      owner: self, userInfo: nil)
+        content.addTrackingArea(tracking)
+        pointerTracking = tracking
         owner.addChildWindow(self, ordered: .above)
-        makeKeyAndOrderFront(nil)
+        // Showing sliders on hover must not interrupt typing in the owner window.
+        orderFront(nil)
 
         // Keep slider drags inside the panel; close on clicks elsewhere or Escape.
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]) { [weak self, weak anchor] event in
@@ -48,7 +57,7 @@ final class WindowSettingsPanel: NSPanel {
                     return nil
                 }
             } else if event.window !== self {
-                // Let the anchor button toggle this panel itself.
+                // Keep the anchor available for keyboard access.
                 if let anchor, event.window === anchor.window,
                    anchor.bounds.contains(anchor.convert(event.locationInWindow, from: nil)) {
                     return event
@@ -67,7 +76,12 @@ final class WindowSettingsPanel: NSPanel {
         }
     }
 
+    override func mouseEntered(with event: NSEvent) { onPointerEntered?() }
+    override func mouseExited(with event: NSEvent) { onPointerExited?() }
+
     override func performClose(_ sender: Any?) {
+        if let pointerTracking { contentViewController?.view.removeTrackingArea(pointerTracking) }
+        pointerTracking = nil
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
@@ -78,6 +92,8 @@ final class WindowSettingsPanel: NSPanel {
         orderOut(nil)
         onDismiss?()
         onDismiss = nil
+        onPointerEntered = nil
+        onPointerExited = nil
     }
 }
 
@@ -191,4 +207,5 @@ final class WindowSettingsController: NSViewController {
     @objc private func sliderChanged() {
         changed(backgroundSlider.doubleValue, contentSlider.doubleValue)
     }
+
 }

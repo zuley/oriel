@@ -17,7 +17,7 @@ final class LockRecoveryPanel: NSPanel {
         isMovable = false
         ignoresMouseEvents = false
         level = .statusBar
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        collectionBehavior = [.stationary, .fullScreenAuxiliary]
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false

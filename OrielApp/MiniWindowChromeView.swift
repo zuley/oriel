@@ -19,8 +19,10 @@ final class MiniWindowChromeView: NSView {
         var dropNovel: ([URL]) -> Bool = { _ in false }
         var renameWindow: () -> Void = {}
         var windowSettings: (NSView) -> Void
+        var settingsHover: (Bool) -> Void = { _ in }
         var toggleFolding: () -> Void = {}
-        var toggleAutomaticHiding: () -> Void
+        var toggleAutomaticHiding: () -> Void = {}
+        var toggleAllSpaces: () -> Void = {}
         var toggleLock: () -> Void
         var hide: () -> Void
         var close: () -> Void
@@ -32,15 +34,29 @@ final class MiniWindowChromeView: NSView {
     private let surfaceHost = NSView()
     private let tabStrip: WindowTabStrip
     private let tabSwitcher = TabSwitcherButton()
+    private let addTabButton: ChromeButton
     private let dragAction: (NSEvent) -> Void
     private let closeTabAction: (Int) -> Void
-    /// The eye switches edge reveal, the slider opens transparency, the lock freezes pass-through.
+    /// The eye switches edge reveal; settings opens transparency; lock freezes pass-through.
     let edgeRevealButton: ChromeButton
+    let spacesButton: ChromeButton
     let foldButton: ChromeButton
     let windowButton: ChromeButton
     private let lockButton: ChromeButton
+    private var overflowButton: ChromeButton!
     private var toolbarButtons: [ChromeButton] = []
     private var isLocked = false
+    private var automaticHiding = false
+    private var automaticFolding = false
+    private var appearsOnAllSpaces = false
+    private var controlsExpanded = false
+    private var controlsCollapsing = false
+    private var controlsAnimationGeneration = 0
+    private weak var transitioningTitle: NSView?
+    private var transitioningTitleWidth: CGFloat = 0
+    private static let controlsAnimationDuration: TimeInterval = 0.16
+    private var settingsPanelOpen = false
+    private var controlsCloseTimer: Timer?
     private(set) var isFolded = false
     private var showingHome = true
     private var expandedHeight: CGFloat = 360
@@ -60,17 +76,20 @@ final class MiniWindowChromeView: NSView {
     var contentTop: CGFloat { layoutState.contentTop }
 
     init(actions: Actions) {
-        tabStrip = WindowTabStrip(select: actions.selectTab, close: actions.closeTab)
+        tabStrip = WindowTabStrip(select: actions.selectTab, close: actions.closeTab, add: actions.addTab)
         dragAction = actions.drag
         closeTabAction = actions.closeTab
-        let addTab = ChromeButton(symbol: .add, label: "新建页签") { _ in actions.addTab() }
+        addTabButton = ChromeButton(symbol: .add, label: "新建页签") { _ in actions.addTab() }
         lockButton = ChromeButton(symbol: .lock, label: "锁定穿透") { _ in actions.toggleLock() }
-        edgeRevealButton = ChromeButton(symbol: .eye, label: "边缘唤醒") { _ in
-            actions.toggleAutomaticHiding()
-        }
+        edgeRevealButton = ChromeButton(symbol: .eye, label: "边缘唤醒") { _ in actions.toggleAutomaticHiding() }
+        spacesButton = ChromeButton(symbol: .spaces, label: "在所有桌面显示") { _ in actions.toggleAllSpaces() }
         foldButton = ChromeButton(symbol: .fold, label: "收起为横条") { _ in actions.toggleFolding() }
         windowButton = ChromeButton(symbol: .settings, label: "窗口设置", action: actions.windowSettings)
         super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 360))
+        overflowButton = ChromeButton(symbol: .more, label: "更多窗口操作") { [weak self] _ in
+            guard let self else { return }
+            self.setControlsExpanded(!self.controlsExpanded)
+        }
 
         home.onOpenPage = actions.openPage
         home.onDropNovel = actions.dropNovel
@@ -83,10 +102,26 @@ final class MiniWindowChromeView: NSView {
 
         let hide = ChromeButton(symbol: .minus, label: "收起到菜单栏") { _ in actions.hide() }
         let close = ChromeButton(symbol: .close, label: "关闭小窗") { _ in actions.close() }
-        toolbarButtons = [close, hide, addTab, foldButton, edgeRevealButton, windowButton, lockButton]
+        toolbarButtons = [close, hide, addTabButton, foldButton, edgeRevealButton,
+                          spacesButton, windowButton, lockButton, overflowButton]
         for button in toolbarButtons {
+            button.wantsLayer = true
             button.onHover = { [weak self, weak button] entered in
                 guard let self, let button else { return }
+                if self.isRightControl(button) {
+                    if entered {
+                        self.cancelControlsClose()
+                        if button === self.overflowButton { self.setControlsExpanded(true) }
+                    } else {
+                        self.scheduleControlsClose()
+                    }
+                }
+                if button === self.windowButton {
+                    self.dismissTooltip()
+                    actions.settingsHover(entered)
+                    return
+                }
+                if button === self.overflowButton { self.dismissTooltip(); return }
                 if entered { self.scheduleTooltip(for: button) }
                 else if self.hoveredButton === button { self.dismissTooltip() }
             }
@@ -98,12 +133,14 @@ final class MiniWindowChromeView: NSView {
         windowName.lineBreakMode = .byTruncatingTail
         windowName.maximumNumberOfLines = 1
         windowName.setAccessibilityLabel("窗口名称")
+        windowName.wantsLayer = true
         windowName.onRename = { [weak self] in
             guard let self, !self.isLocked else { return }
             actions.renameWindow()
         }
         addSubview(windowName)
         tabSwitcher.isHidden = true
+        tabSwitcher.wantsLayer = true
         tabSwitcher.target = self
         tabSwitcher.action = #selector(switcherPressed)
         addSubview(tabSwitcher)
@@ -120,6 +157,7 @@ final class MiniWindowChromeView: NSView {
         addSubview(hoverTip)
         showHome()
         update(isLocked: false, automaticHiding: false)
+        setAppearsOnAllSpaces(false)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -127,23 +165,33 @@ final class MiniWindowChromeView: NSView {
     override func layout() {
         super.layout()
         dismissTooltip()
+        if transitioningTitle != nil, abs(bounds.width - transitioningTitleWidth) > 0.5 {
+            interruptTitleTransition()
+        }
         if !isFolded { expandedHeight = bounds.height }
         let pageHeight = isFolded ? expandedHeight : bounds.height
-        let layout = ChromeLayout.make(width: bounds.width, height: pageHeight, tabCount: tabs.count)
+        let layout = makeLayout(height: pageHeight, expanded: controlsExpanded || controlsCollapsing)
         layoutState = layout
         let frames = [layout.close, layout.hide, layout.addTab, layout.fold, layout.edgeReveal,
-                      layout.window, layout.lock]
+                      layout.spaces, layout.window, layout.lock, layout.overflow]
         for (button, frame) in zip(toolbarButtons, frames) {
+            if button === addTabButton && transitioningTitle === tabSwitcher { continue }
+            if button === overflowButton && transitioningTitle != nil && !isLocked {
+                button.frame = ChromeLayout.lockFrame(forWidth: bounds.width)
+                button.isHidden = false
+                continue
+            }
             button.frame = frame
             button.isHidden = frame.isEmpty || (isLocked && button === lockButton)
+                || (isFolded && button === addTabButton)
         }
 
         let showsSwitcher = !isFolded && layout.tabMode == .switcher && layout.title != nil
-        tabSwitcher.isHidden = !showsSwitcher
-        windowName.isHidden = layout.title == nil || showsSwitcher
+        if transitioningTitle !== tabSwitcher { tabSwitcher.isHidden = !showsSwitcher }
+        if transitioningTitle !== windowName { windowName.isHidden = layout.title == nil || showsSwitcher }
         if let title = layout.title {
-            windowName.frame = title
-            tabSwitcher.frame = title.insetBy(dx: 0, dy: -2)
+            if transitioningTitle !== windowName { windowName.frame = title }
+            if transitioningTitle !== tabSwitcher { tabSwitcher.frame = title.insetBy(dx: 0, dy: -2) }
         }
         tabStrip.isHidden = isFolded || layout.tabMode != .strip
         tabStrip.frame = layout.tabStrip
@@ -195,6 +243,7 @@ final class MiniWindowChromeView: NSView {
 
     func setFolded(_ folded: Bool) {
         guard isFolded != folded else { return }
+        interruptTitleTransition()
         if folded { layoutSubtreeIfNeeded() }
         isFolded = folded
         content.isHidden = folded || !showingHome
@@ -211,6 +260,7 @@ final class MiniWindowChromeView: NSView {
     }
 
     func setTabs(_ tabs: [ChromeTab], selected: Int) {
+        if self.tabs != tabs { interruptControlsCollapse(); interruptTitleTransition() }
         self.tabs = tabs
         selectedTab = selected
         tabStrip.setTabs(tabs, selected: selected)
@@ -293,10 +343,21 @@ final class MiniWindowChromeView: NSView {
     }
 
     func update(isLocked: Bool, automaticHiding: Bool, automaticFolding: Bool = false) {
+        let layoutChanged = self.isLocked != isLocked || self.automaticHiding != automaticHiding
+            || self.automaticFolding != automaticFolding
+        if layoutChanged { interruptControlsCollapse(); interruptTitleTransition() }
+        self.automaticHiding = automaticHiding
+        self.automaticFolding = automaticFolding
         if self.isLocked != isLocked {
             dismissTooltip()
             if isLocked { cancelContentTransition() }
             self.isLocked = isLocked
+            if isLocked {
+                cancelControlsClose()
+                controlsExpanded = false
+                overflowButton.layer?.removeAnimation(forKey: "oriel.overflowFade")
+                overflowButton.setActive(false, label: "更多窗口操作")
+            }
             tabStrip.setEnabled(!isLocked)
             tabSwitcher.isEnabled = !isLocked
             home.setActionsEnabled(!isLocked)
@@ -311,6 +372,227 @@ final class MiniWindowChromeView: NSView {
         foldButton.setActive(automaticFolding, label: automaticFolding ? "保持展开" : "收起为横条")
         windowButton.setHint("透明度设置")
         lockButton.setActive(isLocked, label: isLocked ? "解除锁定穿透" : "锁定穿透")
+        if layoutChanged { needsLayout = true }
+    }
+
+    func setAppearsOnAllSpaces(_ enabled: Bool) {
+        if appearsOnAllSpaces != enabled {
+            interruptControlsCollapse()
+            interruptTitleTransition()
+            appearsOnAllSpaces = enabled
+            needsLayout = true
+        }
+        spacesButton.setActive(enabled, label: enabled ? "仅在当前桌面显示" : "在所有桌面显示")
+        spacesButton.setAccessibilityValue(enabled ? "所有桌面" : "当前桌面")
+    }
+
+    func setSettingsPanelOpen(_ open: Bool) {
+        settingsPanelOpen = open
+        if open { setControlsExpanded(true) }
+        else { scheduleControlsClose() }
+    }
+
+    private func isRightControl(_ button: ChromeButton) -> Bool {
+        button === foldButton || button === edgeRevealButton || button === spacesButton
+            || button === windowButton || button === lockButton || button === overflowButton
+    }
+
+    private func makeLayout(height: CGFloat, expanded: Bool) -> ChromeLayout {
+        ChromeLayout.make(width: bounds.width, height: height, tabCount: tabs.count,
+                          showsSingleTab: tabs.count == 1 && tabs[0].kind != nil,
+                          controlsExpanded: expanded, automaticFolding: automaticFolding,
+                          automaticHiding: automaticHiding, allSpaces: appearsOnAllSpaces,
+                          locked: isLocked)
+    }
+
+    private var currentTitleView: NSView {
+        layoutState.tabMode == .switcher ? tabSwitcher : windowName
+    }
+
+    private func interruptTitleTransition() {
+        guard let title = transitioningTitle else { return }
+        title.layer?.removeAllAnimations()
+        title.alphaValue = 1
+        if title === tabSwitcher {
+            addTabButton.layer?.removeAllAnimations()
+            addTabButton.alphaValue = 1
+        }
+        overflowButton.layer?.removeAnimation(forKey: "oriel.overflowFade")
+        transitioningTitle = nil
+        needsLayout = true
+    }
+
+    private func animateOverflow(from start: Float, to end: Float) {
+        guard let layer = overflowButton.layer else { return }
+        layer.removeAnimation(forKey: "oriel.overflowFade")
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = start
+        fade.toValue = end
+        fade.duration = Self.controlsAnimationDuration
+        fade.timingFunction = CAMediaTimingFunction(name: end == 0 ? .easeOut : .easeIn)
+        fade.fillMode = .forwards
+        fade.isRemovedOnCompletion = false
+        layer.add(fade, forKey: "oriel.overflowFade")
+    }
+
+    private func animateTitleView(_ view: NSView, to frame: CGRect?) {
+        guard let frame else {
+            if !view.isHidden { view.animator().alphaValue = 0 }
+            return
+        }
+        if view.isHidden {
+            view.frame = frame
+            view.alphaValue = 0
+            view.isHidden = false
+        }
+        view.animator().frame = frame
+        if view.alphaValue < 1 { view.animator().alphaValue = 1 }
+    }
+
+    private func animateTitle(to target: ChromeLayout, view title: NSView) {
+        let frame = target.title.map { target.tabMode == .switcher
+            ? $0.insetBy(dx: 0, dy: -2) : $0 }
+        animateTitleView(title, to: frame)
+        if title === tabSwitcher {
+            animateTitleView(addTabButton, to: target.addTab.isEmpty ? nil : target.addTab)
+        }
+    }
+
+    private func finishTitleTransition(generation: Int) {
+        guard controlsAnimationGeneration == generation else { return }
+        let title = transitioningTitle
+        transitioningTitle = nil
+        title?.alphaValue = 1
+        if title === tabSwitcher { addTabButton.alphaValue = 1 }
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+        overflowButton.layer?.removeAnimation(forKey: "oriel.overflowFade")
+    }
+
+    private func interruptControlsCollapse() {
+        guard controlsCollapsing else { return }
+        controlsAnimationGeneration += 1
+        controlsCollapsing = false
+        interruptTitleTransition()
+        for button in [foldButton, edgeRevealButton, spacesButton, windowButton, lockButton] {
+            button.layer?.removeAllAnimations()
+            button.alphaValue = 1
+        }
+    }
+
+    private func setControlsExpanded(_ expanded: Bool) {
+        guard !isLocked, (expanded || !settingsPanelOpen), controlsExpanded != expanded else { return }
+        cancelControlsClose()
+        if expanded { interruptControlsCollapse() }
+        interruptTitleTransition()
+        layoutSubtreeIfNeeded()
+        let animate = window?.isVisible == true
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let title = currentTitleView
+        if animate {
+            transitioningTitle = title
+            transitioningTitleWidth = bounds.width
+        }
+        let previousControlFrames = Dictionary(uniqueKeysWithValues: toolbarButtons
+            .filter { !$0.isHidden && isRightControl($0) && $0 !== overflowButton }
+            .map { (ObjectIdentifier($0), $0.frame) })
+        let overflowOrigin = layoutState.overflow.midX
+        let newlyVisible = expanded ? toolbarButtons.filter(\.isHidden) : []
+        controlsExpanded = expanded
+        controlsAnimationGeneration += 1
+        let generation = controlsAnimationGeneration
+        overflowButton.setActive(expanded, label: expanded ? "收起窗口操作" : "更多窗口操作")
+        if !expanded, animate {
+            animateControlsClosed(title: title, generation: generation)
+            return
+        }
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+        guard expanded, animate else { return }
+        animateOverflow(from: 1, to: 0)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.controlsAnimationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            animateTitle(to: layoutState, view: title)
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated { self?.finishTitleTransition(generation: generation) }
+        }
+        for button in toolbarButtons where !button.isHidden && isRightControl(button) && button !== overflowButton {
+            guard let layer = button.layer else { continue }
+            let slide = CABasicAnimation(keyPath: "transform.translation.x")
+            slide.fromValue = (previousControlFrames[ObjectIdentifier(button)]?.midX ?? overflowOrigin)
+                - button.frame.midX
+            slide.toValue = 0
+            slide.duration = Self.controlsAnimationDuration
+            slide.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(slide, forKey: "oriel.controlReveal")
+            guard newlyVisible.contains(where: { $0 === button }) else { continue }
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0
+            fade.toValue = 1
+            fade.duration = Self.controlsAnimationDuration
+            layer.add(fade, forKey: "oriel.controlFade")
+        }
+    }
+
+    private func animateControlsClosed(title: NSView, generation: Int) {
+        let pageHeight = isFolded ? expandedHeight : bounds.height
+        let target = makeLayout(height: pageHeight, expanded: false)
+        let destinations: [(ChromeButton, CGRect)] = [
+            (foldButton, target.fold), (edgeRevealButton, target.edgeReveal),
+            (spacesButton, target.spaces), (windowButton, target.window),
+            (lockButton, target.lock)
+        ]
+        controlsCollapsing = true
+        overflowButton.frame = target.overflow
+        overflowButton.isHidden = false
+        animateOverflow(from: 0, to: 1)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.controlsAnimationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            animateTitle(to: target, view: title)
+            for (button, destination) in destinations where !button.isHidden {
+                let frame = destination.isEmpty
+                    ? CGRect(x: target.overflow.midX - button.frame.width / 2, y: 0,
+                             width: button.frame.width, height: button.frame.height)
+                    : destination
+                button.animator().frame = frame
+                if destination.isEmpty { button.animator().alphaValue = 0 }
+            }
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.controlsAnimationGeneration == generation,
+                      !self.controlsExpanded else { return }
+                self.controlsCollapsing = false
+                self.finishTitleTransition(generation: generation)
+                for (button, _) in destinations { button.alphaValue = 1 }
+            }
+        }
+    }
+
+    private func cancelControlsClose() {
+        controlsCloseTimer?.invalidate()
+        controlsCloseTimer = nil
+    }
+
+    private func scheduleControlsClose() {
+        guard controlsExpanded, !settingsPanelOpen else { return }
+        cancelControlsClose()
+        let timer = Timer(timeInterval: 0.18, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.controlsCloseTimer = nil
+                guard !self.settingsPanelOpen, let window = self.window else { return }
+                let point = self.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+                let frames = [self.layoutState.fold, self.layoutState.edgeReveal,
+                              self.layoutState.spaces, self.layoutState.window,
+                              self.layoutState.lock, self.layoutState.overflow].filter { !$0.isEmpty }
+                let region = frames.reduce(CGRect.null) { $0.union($1) }.insetBy(dx: -4, dy: -5)
+                if !region.contains(point) { self.setControlsExpanded(false) }
+            }
+        }
+        controlsCloseTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     // MARK: Tab menu
@@ -536,9 +818,10 @@ final class ChromeButton: NSButton {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        // Fade only the artwork so even an invisible icon keeps its tracking area.
+        // Fade only the artwork so the button retains its tracking area.
         let opacity = iconOpacity
-        guard opacity > 0, let context = NSGraphicsContext.current?.cgContext else { return }
+        guard opacity > 0,
+              let context = NSGraphicsContext.current?.cgContext else { return }
         context.saveGState()
         context.setAlpha(opacity)
         context.beginTransparencyLayer(auxiliaryInfo: nil)
@@ -546,16 +829,15 @@ final class ChromeButton: NSButton {
             context.endTransparencyLayer()
             context.restoreGState()
         }
-        let highlighted = isEnabled && active && (symbol == .lock || symbol == .eye || symbol == .fold)
         if symbol == .minus || symbol == .close {
             drawTrafficLight()
         } else {
-            if isEnabled && (hovered || isHighlighted || active) {
-                (highlighted ? OrielPalette.selection
-                    : (isHighlighted ? ChromePalette.pressed : ChromePalette.hover)).setFill()
+            if isEnabled && !active && (hovered || isHighlighted) {
+                (isHighlighted ? ChromePalette.pressed : ChromePalette.hover).setFill()
                 NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 3), xRadius: 4, yRadius: 4).fill()
             }
-            let tint = highlighted ? OrielPalette.accent : (isEnabled ? ChromePalette.ink : ChromePalette.disabled)
+            let tint = isEnabled && active ? OrielPalette.accent
+                : (isEnabled ? ChromePalette.ink : ChromePalette.disabled)
             let icon = symbol == .fold && active ? ChromeSymbol.unfold : symbol
             icon.draw(in: NSRect(x: bounds.midX - 7, y: bounds.midY - 7, width: 14, height: 14),
                         color: tint)
@@ -592,7 +874,7 @@ final class ChromeButton: NSButton {
 
 @MainActor
 enum ChromeSymbol: Equatable {
-    case add, fold, unfold, eye, settings, lock, minus, close, stocks
+    case add, fold, unfold, eye, spaces, settings, lock, more, minus, close, stocks
 
     func draw(in rect: NSRect, color: NSColor) {
         NSGraphicsContext.saveGraphicsState()
@@ -639,6 +921,9 @@ enum ChromeSymbol: Equatable {
                        controlPoint2: NSPoint(x: 5, y: 18))
             path.appendOval(in: NSRect(x: 7, y: 7, width: 6, height: 6))
             NSBezierPath(ovalIn: NSRect(x: 9, y: 9, width: 2, height: 2)).fill()
+        case .spaces:
+            path.appendRoundedRect(NSRect(x: 2, y: 4, width: 11, height: 11), xRadius: 1.5, yRadius: 1.5)
+            path.appendRoundedRect(NSRect(x: 7, y: 7, width: 11, height: 11), xRadius: 1.5, yRadius: 1.5)
         case .settings:
             line([NSPoint(x: 2, y: 6), NSPoint(x: 10, y: 6)])
             line([NSPoint(x: 14, y: 6), NSPoint(x: 18, y: 6)])
@@ -655,6 +940,10 @@ enum ChromeSymbol: Equatable {
                        controlPoint2: NSPoint(x: 14, y: 0.5))
             path.line(to: NSPoint(x: 14, y: 8.5))
             line([NSPoint(x: 10, y: 12), NSPoint(x: 10, y: 15)])
+        case .more:
+            for x in [4.5, 10.0, 15.5] as [CGFloat] {
+                NSBezierPath(ovalIn: NSRect(x: x - 1.25, y: 8.75, width: 2.5, height: 2.5)).fill()
+            }
         case .minus:
             line([NSPoint(x: 2, y: 10), NSPoint(x: 18, y: 10)])
         case .close:
