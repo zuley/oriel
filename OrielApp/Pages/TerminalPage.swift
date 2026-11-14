@@ -14,6 +14,8 @@ final class TerminalPage: TabPage {
     /// A command, not just the idle shell, owns the terminal.
     var isBusy: Bool { terminal.hasForegroundJob }
     var isFinished: Bool { !terminal.isRunning }
+    /// The shell process, for the workspace resource readout.
+    var shellPID: pid_t { terminal.shellPID }
 
     init(host: PageHost, frame: NSRect) {
         self.host = host

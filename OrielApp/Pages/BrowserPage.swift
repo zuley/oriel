@@ -8,6 +8,8 @@ final class BrowserPage: TabPage {
     private weak var host: PageHost?
     var view: NSView { browser }
     var title: String { browser.pageTitle }
+    /// The WebContent process behind this page, for the workspace resource readout.
+    var webProcessID: pid_t? { browser.webProcessID }
 
     init(host: PageHost, frame: NSRect) {
         self.host = host

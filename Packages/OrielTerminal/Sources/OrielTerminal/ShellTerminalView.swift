@@ -40,6 +40,9 @@ public final class ShellTerminalView: LocalProcessTerminalView {
         processDelegate = directoryObserver
     }
 
+    /// The shell's process ID; 0 when the shell is not running.
+    public var shellPID: pid_t { isRunning ? process.shellPid : 0 }
+
     /// True while something other than the idle shell owns the terminal (a build, an editor, ssh...).
     public var hasForegroundJob: Bool {
         guard isRunning, !isClosing, process.shellPid > 0 else { return false }

@@ -54,11 +54,20 @@ final class ManagementWindow: NSWindowController, NSWindowDelegate {
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        startResourceSampling()
+    }
+
+    /// Per-window numbers are only needed while the workspace is open.
+    private func startResourceSampling() {
+        ResourceSampler.shared.start { [weak self] in
+            (self?.model?.windows ?? []).map { (id: $0.id, sources: $0.resourceSources) }
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
         state.isPresented = false
         model?.clearWindowHover()
+        ResourceSampler.shared.stop()
         NSApp.setActivationPolicy(.accessory)
     }
 
@@ -66,7 +75,11 @@ final class ManagementWindow: NSWindowController, NSWindowDelegate {
     func windowWillMiniaturize(_ notification: Notification) {
         state.isPresented = false
         model?.clearWindowHover()
+        ResourceSampler.shared.stop()
     }
-    func windowDidDeminiaturize(_ notification: Notification) { state.isPresented = true }
+    func windowDidDeminiaturize(_ notification: Notification) {
+        state.isPresented = true
+        startResourceSampling()
+    }
 
 }

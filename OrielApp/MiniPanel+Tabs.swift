@@ -50,6 +50,25 @@ extension MiniPanel {
         activate(tab)
     }
 
+    /// Processes and text this window owns, read by the workspace resource sampler.
+    var resourceSources: WindowResourceSources {
+        var sources = WindowResourceSources()
+        var books = Set<String>()
+        for tab in tabs {
+            for page in tab.pages.values {
+                if let terminal = page as? TerminalPage, terminal.shellPID > 0 {
+                    sources.terminalPIDs.append(terminal.shellPID)
+                } else if let browser = page as? BrowserPage, let pid = browser.webProcessID {
+                    sources.webPIDs.append(pid)
+                } else if let novel = page as? NovelPage, let bookID = novel.bookID,
+                          books.insert(bookID).inserted {
+                    sources.textBytes += novel.retainedTextBytes
+                }
+            }
+        }
+        return sources
+    }
+
     /// Titles of terminal tabs whose shell is running a command.
     var busyTerminalTitles: [String] {
         CloseGuard.busyTitles(tabs.compactMap { tab in

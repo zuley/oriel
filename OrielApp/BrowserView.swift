@@ -43,6 +43,16 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         return webView.url?.host ?? BrowserPages.startTitle
     }
 
+    /// The WebContent process behind this page. WebKit exposes it only through a
+    /// private accessor, so this returns nil if that accessor disappears.
+    var webProcessID: pid_t? {
+        let selector = NSSelectorFromString("_webProcessIdentifier")
+        guard webView.responds(to: selector),
+              let number = webView.value(forKey: "_webProcessIdentifier") as? NSNumber,
+              number.int32Value > 0 else { return nil }
+        return pid_t(number.int32Value)
+    }
+
     var canGoBack: Bool { webView.canGoBack }
     var canGoForward: Bool { webView.canGoForward }
     var isEditingAddress: Bool { (window?.firstResponder as? NSTextView)?.delegate === addressField }

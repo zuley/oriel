@@ -8,6 +8,12 @@ final class NovelPage: TabPage {
     let session: NovelSession
     private weak var host: PageHost?
     var title: String { session.book?.title ?? "小说" }
+    /// The open book, so its text is counted once even with two reading tabs.
+    var bookID: String? { session.book?.id }
+    /// UTF-8 size of the decoded chapters this reader keeps alive (an estimate).
+    var retainedTextBytes: UInt64 {
+        session.chapters.reduce(0) { $0 + UInt64($1.title.utf8.count + $1.text.utf8.count) }
+    }
 
     init(host: PageHost, library: NovelLibrary) {
         self.host = host

@@ -137,6 +137,7 @@ struct ManagementView: View {
 private struct WorkspaceManagementView: View {
     @ObservedObject var model: AppModel
     let isPresented: Bool
+    @ObservedObject private var sampler = ResourceSampler.shared
     @State private var hovered: UUID?
 
     var body: some View {
@@ -151,7 +152,8 @@ private struct WorkspaceManagementView: View {
                             ForEach(model.windows) { window in
                                 ManagedWindowThumbnail(window: window, isPresented: isPresented,
                                                        viewportSize: viewport.size,
-                                                       highlighted: hovered == window.id)
+                                                       highlighted: hovered == window.id,
+                                                       usage: sampler.windows[window.id] ?? WindowResourceUsage())
                                     .contentShape(Rectangle())
                                     .onHover { inside in
                                         if inside { hovered = window.id }
@@ -222,6 +224,7 @@ private struct ManagedWindowThumbnail: View {
     let isPresented: Bool
     let viewportSize: CGSize
     let highlighted: Bool
+    let usage: WindowResourceUsage
     private let refresh = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
     @State private var isInViewport = false
     @State private var closing = false
@@ -229,65 +232,66 @@ private struct ManagedWindowThumbnail: View {
     @State private var nameDraft = ""
     var body: some View {
         if let snapshot = window.snapshot {
-            Button { window.showFromWorkspace() } label: {
-                WindowThumbnail(windowSize: snapshot.frame.size, image: window.thumbnail, highlighted: highlighted)
-                    .opacity(snapshot.isVisible ? 1 : 0.42)
-            }
-            .buttonStyle(.plain)
-            .contentShape(Rectangle())
-            .help(snapshot.isVisible ? window.name : "\(window.name) · 已隐藏")
-            .accessibilityLabel(snapshot.isVisible ? window.name : "\(window.name)，已隐藏")
-            .contextMenu {
-                Button(snapshot.isVisible ? "隐藏" : "显示") {
-                    if snapshot.isVisible { window.hide() }
-                    else { window.showFromWorkspace() }
+            let width = thumbnailHeight * max(snapshot.frame.width, 1) / max(snapshot.frame.height, 1)
+            VStack(alignment: .leading, spacing: 7) {
+                Button { window.showFromWorkspace() } label: {
+                    WindowThumbnail(width: width, image: window.thumbnail, highlighted: highlighted)
                 }
-                Button("重命名") {
-                    nameDraft = window.name
-                    renaming = true
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .help(snapshot.isVisible ? window.name : "\(window.name) · 已隐藏")
+                .accessibilityLabel(snapshot.isVisible ? window.name : "\(window.name)，已隐藏")
+                .contextMenu {
+                    Button(snapshot.isVisible ? "隐藏" : "显示") {
+                        if snapshot.isVisible { window.hide() }
+                        else { window.showFromWorkspace() }
+                    }
+                    Button("重命名") {
+                        nameDraft = window.name
+                        renaming = true
+                    }
+                    Divider()
+                    Button("关闭", role: .destructive) { closing = true }
                 }
-                Divider()
-                Button("关闭", role: .destructive) { closing = true }
+                .onGeometryChange(for: Bool.self) { geometry in
+                    geometry.frame(in: .named("thumbnailViewport"))
+                        .intersects(CGRect(origin: .zero, size: viewportSize))
+                } action: { visible in
+                    isInViewport = visible
+                    if visible && isPresented { window.refreshThumbnail() }
+                }
+                .onReceive(refresh) { _ in if isPresented && isInViewport { window.refreshThumbnail() } }
+                .onChange(of: isPresented) { _, visible in
+                    if visible && isInViewport { window.refreshThumbnail() }
+                }
+                .alert("关闭\(window.name)？", isPresented: $closing) {
+                    Button("取消", role: .cancel) {}
+                    // This alert is the confirmation, so it also covers running terminal commands.
+                    Button("关闭", role: .destructive) { window.close(endingJobs: true) }
+                } message: {
+                    Text((CloseGuard.message(busy: window.busyTerminalTitles).map { $0 + "\n\n" } ?? "")
+                         + "将关闭此窗口的所有页签并结束其中的终端会话，其他小窗不受影响。")
+                }
+                .alert("重命名小窗", isPresented: $renaming) {
+                    TextField("窗口名称", text: $nameDraft).accessibilityLabel("窗口名称")
+                    Button("取消", role: .cancel) {}
+                    Button("保存") { window.rename(nameDraft) }
+                        .disabled(MiniWindowSession.validatedName(nameDraft) == nil)
+                } message: { Text("最多 32 个字") }
+                ResourceCaption(usage: usage)
             }
-            .onGeometryChange(for: Bool.self) { geometry in
-                geometry.frame(in: .named("thumbnailViewport"))
-                    .intersects(CGRect(origin: .zero, size: viewportSize))
-            } action: { visible in
-                isInViewport = visible
-                if visible && isPresented { window.refreshThumbnail() }
-            }
-            .onReceive(refresh) { _ in if isPresented && isInViewport { window.refreshThumbnail() } }
-            .onChange(of: isPresented) { _, visible in
-                if visible && isInViewport { window.refreshThumbnail() }
-            }
-            .alert("关闭\(window.name)？", isPresented: $closing) {
-                Button("取消", role: .cancel) {}
-                // This alert is the confirmation, so it also covers running terminal commands.
-                Button("关闭", role: .destructive) { window.close(endingJobs: true) }
-            } message: {
-                Text((CloseGuard.message(busy: window.busyTerminalTitles).map { $0 + "\n\n" } ?? "")
-                     + "将关闭此窗口的所有页签并结束其中的终端会话，其他小窗不受影响。")
-            }
-            .alert("重命名小窗", isPresented: $renaming) {
-                TextField("窗口名称", text: $nameDraft).accessibilityLabel("窗口名称")
-                Button("取消", role: .cancel) {}
-                Button("保存") { window.rename(nameDraft) }
-                    .disabled(MiniWindowSession.validatedName(nameDraft) == nil)
-            } message: { Text("最多 32 个字") }
+            .opacity(snapshot.isVisible ? 1 : 0.42)
         }
     }
 }
 
+private let thumbnailHeight: CGFloat = 240
+
 private struct WindowThumbnail: View {
-    let windowSize: CGSize
+    let width: CGFloat
     let image: NSImage?
     let highlighted: Bool
-    private let height: CGFloat = 240
     private let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
-
-    private var width: CGFloat {
-        height * max(windowSize.width, 1) / max(windowSize.height, 1)
-    }
 
     var body: some View {
         ZStack {
@@ -296,7 +300,7 @@ private struct WindowThumbnail: View {
                 Image(nsImage: image).resizable().interpolation(.high).scaledToFit()
             }
         }
-        .frame(width: width, height: height)
+        .frame(width: width, height: thumbnailHeight)
         .clipShape(shape)
         .overlay {
             shape.strokeBorder(Color.black.opacity(0.07), lineWidth: highlighted ? 0 : 0.5)
@@ -307,6 +311,36 @@ private struct WindowThumbnail: View {
         .shadow(color: .black.opacity(highlighted ? 0.16 : 0.08),
                 radius: highlighted ? 12 : 8, x: 0, y: highlighted ? 5 : 3)
         .animation(.easeOut(duration: 0.14), value: highlighted)
+    }
+}
+
+/// The small resource line under a thumbnail. Numbers use tabular digits so the
+/// rows stay still while they update every two seconds.
+private struct ResourceCaption: View {
+    let usage: WindowResourceUsage
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if usage.isEmpty {
+                Text("—")
+            } else {
+                metric("memorychip", usage.memoryText)
+                metric("cpu", usage.cpuText)
+            }
+        }
+        .font(.system(size: 10, design: .monospaced))
+        .foregroundStyle(OrielPalette.mutedText)
+        .lineLimit(1)
+        .help(usage.helpText)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(usage.isEmpty ? "没有单独统计的资源占用" : "内存 \(usage.memoryText)，CPU \(usage.cpuText)")
+    }
+
+    private func metric(_ symbol: String, _ text: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: symbol).font(.system(size: 8))
+            Text(text)
+        }
     }
 }
 

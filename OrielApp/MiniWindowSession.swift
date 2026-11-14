@@ -117,6 +117,8 @@ final class MiniWindowSession: ObservableObject, Identifiable {
         if snapshot?.isVisible == false { refreshThumbnail(includeHidden: true) }
     }
     func setEmphasis(_ emphasis: WindowGroupController.Emphasis) { panel?.setEmphasis(emphasis) }
+    /// Terminal and web processes plus the novel text this window holds.
+    var resourceSources: WindowResourceSources { panel?.resourceSources ?? .init() }
     func containsNote(_ id: UUID) -> Bool { panel?.containsNote(id) ?? false }
     func revealNote(_ id: UUID) {
         guard containsNote(id) else { return }
