@@ -11,46 +11,88 @@ struct NotesView: View {
     var body: some View {
         GeometryReader { geometry in
             Group {
-            if geometry.size.height < 68 { pocket } else {
-            VStack(spacing: 0) {
-                HStack(spacing: 2) {
-                    if geometry.size.width < 170 {
-                        Menu { menuItems; Divider(); noteChoices } label: {
-                            Label(session.showingList ? (session.showingTrash ? "回收站" : "便签") : session.document.title,
-                                  systemImage: "note.text").lineLimit(1)
-                        }.menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
-                            .accessibilityLabel("便签菜单")
-                    } else {
-                        icon(session.showingList ? "chevron.left" : "list.bullet", session.showingList ? "返回便签" : "便签列表") {
-                            if session.showingList { session.showingList = false }
-                            else { session.showList() }
-                        }
-                        Text(session.showingList ? (session.showingTrash ? "回收站" : "便签") : session.document.title)
-                            .fontWeight(.medium).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-                        icon("plus", "新建便签") { open(workspace.create()) }
-                        Menu { menuItems } label: { Image(systemName: "ellipsis").frame(width: 22, height: 22) }
-                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().accessibilityLabel("便签操作")
-                    }
-                    if workspace.loadError != nil {
-                        icon("exclamationmark.circle", "便签恢复提示", action: showRecovery).foregroundStyle(Color(nsColor: OrielPalette.amber))
-                    }
-                    NoteStatus(document: session.document, workspace: workspace).frame(width: 14)
-                }.frame(height: 22).padding(.horizontal, 4)
-                if session.showingList { list }
-                else if session.document.record.deleted != nil {
-                    VStack(spacing: 4) {
-                        Text("已移到回收站").foregroundStyle(OrielPalette.mutedText)
-                        Button("恢复便签") { restore(session.document) }
-                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                if geometry.size.height < 68 {
+                    pocket
                 } else {
-                    NotesEditor(document: session.document).id(session.document.id)
+                    VStack(spacing: 0) {
+                        toolbar(width: geometry.size.width)
+                        if session.showingList {
+                            list
+                        } else if session.document.record.deleted != nil {
+                            trashState
+                        } else {
+                            NotesEditor(document: session.document).id(session.document.id)
+                        }
+                    }
                 }
             }
-            }
-            }.frame(width: geometry.size.width, height: geometry.size.height)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
-        .font(.system(size: 11)).foregroundStyle(OrielPalette.text).tint(accent).buttonStyle(.plain)
+        .font(.system(size: 11))
+        .foregroundStyle(OrielPalette.text)
+        .tint(accent)
+        .buttonStyle(.plain)
     }
+
+    // MARK: Toolbar
+
+    @ViewBuilder private func toolbar(width: CGFloat) -> some View {
+        HStack(spacing: 2) {
+            if width < 170 {
+                Menu { menuItems; Divider(); noteChoices } label: {
+                    Label(session.showingList ? (session.showingTrash ? "回收站" : "便签") : session.document.title,
+                          systemImage: "note.text")
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .padding(.horizontal, 7)
+                        .frame(height: 22)
+                }
+                .menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
+                .background(Color(nsColor: OrielPalette.field), in: RoundedRectangle(cornerRadius: 6))
+                .accessibilityLabel("便签菜单")
+                Spacer(minLength: 0)
+            } else {
+                icon(session.showingList ? "chevron.left" : "list.bullet",
+                     session.showingList ? "返回便签" : "便签列表") {
+                    if session.showingList { session.showingList = false }
+                    else { session.showList() }
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(session.showingList ? (session.showingTrash ? "回收站" : "便签") : session.document.title)
+                        .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    if session.showingList {
+                        Text("\(workspace.list(query: session.query, trash: session.showingTrash).count) 张")
+                            .font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                icon("plus", "新建便签") { open(workspace.create()) }
+                Menu { menuItems } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 12, weight: .medium))
+                        .frame(width: 22, height: 22).contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .accessibilityLabel("便签操作")
+            }
+            if workspace.loadError != nil {
+                icon("exclamationmark.circle", "便签恢复提示", action: showRecovery)
+                    .foregroundStyle(Color(nsColor: OrielPalette.amber))
+            }
+            NoteStatus(document: session.document, workspace: workspace).frame(minWidth: 18)
+        }
+        .frame(height: 26)
+        .padding(.horizontal, 4)
+    }
+
+    private func icon(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 12, weight: .medium))
+                .frame(width: 22, height: 22).contentShape(Rectangle())
+        }
+        .accessibilityLabel(label).help(label)
+    }
+
+    // MARK: Compact layout
 
     private var pocket: some View {
         HStack(spacing: 0) {
@@ -62,10 +104,11 @@ struct NotesView: View {
                 .popover(isPresented: $session.showingList, arrowEdge: .bottom) {
                     VStack(spacing: 0) {
                         HStack {
-                            Text(session.showingTrash ? "回收站" : "便签").fontWeight(.medium)
+                            Text(session.showingTrash ? "回收站" : "便签").font(.system(size: 12, weight: .semibold))
                             Spacer()
                             icon("xmark", "关闭便签列表") { session.showingList = false }
-                        }.padding(.leading, 7)
+                        }
+                        .padding(.leading, 8).padding(.trailing, 4).padding(.vertical, 3)
                         list
                     }.frame(width: 240, height: 240)
                         .font(.system(size: 11)).buttonStyle(.plain).tint(accent)
@@ -80,10 +123,123 @@ struct NotesView: View {
         }
     }
 
-    private func icon(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).frame(width: 22, height: 22).contentShape(Rectangle()) }
-            .accessibilityLabel(label).help(label)
+    // MARK: List
+
+    private var list: some View {
+        let documents = workspace.list(query: session.query, trash: session.showingTrash)
+        return VStack(spacing: 0) {
+            searchPill
+                .padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 5)
+            ScrollView {
+                LazyVStack(spacing: 1) {
+                    if workspace.loadError != nil { recoveryRow }
+                    ForEach(documents) { document in
+                        noteRow(document)
+                    }
+                    if documents.isEmpty { emptyList }
+                }
+                .padding(.horizontal, 3).padding(.bottom, 4)
+            }
+        }
     }
+
+    private var searchPill: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "magnifyingglass").font(.system(size: 9, weight: .medium))
+                .foregroundStyle(OrielPalette.mutedText)
+            NotesSearch(session: session, submit: {
+                if let first = workspace.list(query: session.query, trash: session.showingTrash).first {
+                    if session.showingTrash { restore(first) } else { open(first) }
+                }
+            }).frame(maxWidth: .infinity, minHeight: 18, maxHeight: 18)
+            if !session.query.isEmpty {
+                Button { session.query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 10))
+                        .foregroundStyle(OrielPalette.mutedText)
+                        .frame(width: 20, height: 20).contentShape(Rectangle())
+                }.accessibilityLabel("清除搜索")
+            }
+        }
+        .padding(.horizontal, 7)
+        .frame(height: 23)
+        .background(Color(nsColor: OrielPalette.field), in: RoundedRectangle(cornerRadius: 7))
+    }
+
+    private var recoveryRow: some View {
+        Button(action: showRecovery) {
+            HStack(spacing: 5) {
+                Image(systemName: "exclamationmark.circle.fill").font(.system(size: 10))
+                Text("有恢复提示 · 查看").font(.system(size: 10))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Color(nsColor: OrielPalette.amber))
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(Color(nsColor: OrielPalette.amber).opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+        }
+        .padding(.horizontal, 3).padding(.bottom, 3)
+    }
+
+    private func noteRow(_ document: NoteDocument) -> some View {
+        Button {
+            if session.showingTrash { restore(document) } else { open(document) }
+        } label: {
+            HStack(spacing: 7) {
+                if document.record.pinned {
+                    Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(accent)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(document.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Text(preview(document)).font(.system(size: 10))
+                        .foregroundStyle(OrielPalette.mutedText).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let error = document.errorMessage {
+                    Image(systemName: "exclamationmark.circle.fill").font(.system(size: 10))
+                        .foregroundStyle(Color(nsColor: OrielPalette.amber)).help(error)
+                }
+                Image(systemName: session.showingTrash ? "arrow.uturn.backward" : "chevron.right")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(OrielPalette.mutedText.opacity(0.6))
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .notesRow()
+        }
+        .accessibilityLabel(session.showingTrash ? "恢复：" + document.title : document.title)
+        .contextMenu {
+            if session.showingTrash { Button("恢复") { restore(document) } }
+            else {
+                Button(document.record.pinned ? "取消置顶" : "置顶") {
+                    try? workspace.setPinned(!document.record.pinned, for: document)
+                }
+                Button("移到回收站") { try? workspace.trash(document) }
+            }
+        }
+    }
+
+    private var emptyList: some View {
+        NotesEmptyState(
+            icon: session.showingTrash ? "trash" : (session.query.isEmpty ? "note.text" : "magnifyingglass"),
+            title: session.query.isEmpty ? (session.showingTrash ? "回收站为空" : "还没有便签") : "没有匹配的便签",
+            detail: session.query.isEmpty && !session.showingTrash ? "第一行会作为标题，随手记下就好" : nil,
+            actionTitle: session.query.isEmpty ? (session.showingTrash ? nil : "新建便签") : "清除搜索"
+        ) {
+            if session.query.isEmpty { open(workspace.create()) }
+            else { session.query = "" }
+        }
+    }
+
+    private var trashState: some View {
+        NotesEmptyState(icon: "trash", title: "已移到回收站", detail: "恢复后可以继续编辑",
+                        actionTitle: "恢复便签") { restore(session.document) }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func preview(_ document: NoteDocument) -> String {
+        let lines = document.text.split(whereSeparator: \.isNewline)
+        return lines.dropFirst().first.map(String.init) ?? (document.text.isEmpty ? "空白便签" : "")
+    }
+
+    // MARK: Menus and actions
 
     @ViewBuilder private var menuItems: some View {
         if let error = session.document.errorMessage {
@@ -133,68 +289,6 @@ struct NotesView: View {
         }
     }
 
-    private var list: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 3) {
-                Image(systemName: "magnifyingglass").foregroundStyle(OrielPalette.mutedText)
-                NotesSearch(session: session, submit: {
-                    if let first = workspace.list(query: session.query, trash: session.showingTrash).first {
-                        if session.showingTrash { restore(first) } else { open(first) }
-                    }
-                }).frame(height: 20)
-                if !session.query.isEmpty {
-                    icon("xmark.circle.fill", "清除搜索") { session.query = "" }
-                }
-            }.padding(.horizontal, 6).frame(height: 24)
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if workspace.loadError != nil {
-                        Button("有恢复提示 · 查看") { showRecovery() }
-                            .foregroundStyle(Color(nsColor: OrielPalette.amber)).frame(maxWidth: .infinity, alignment: .leading).padding(6)
-                    }
-                    let documents = workspace.list(query: session.query, trash: session.showingTrash)
-                    ForEach(documents) { document in
-                        Button {
-                            if session.showingTrash { restore(document) } else { open(document) }
-                        } label: {
-                            HStack(spacing: 5) {
-                                if document.record.pinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(accent) }
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(document.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                                    Text(preview(document)).font(.system(size: 10)).foregroundStyle(OrielPalette.mutedText).lineLimit(1)
-                                }.frame(maxWidth: .infinity, alignment: .leading)
-                                if let error = document.errorMessage {
-                                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color(nsColor: OrielPalette.amber)).help(error)
-                                }
-                                Image(systemName: session.showingTrash ? "arrow.uturn.backward" : "chevron.right")
-                                    .font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
-                            }.padding(.horizontal, 6).padding(.vertical, 7).contentShape(Rectangle())
-                        }.accessibilityLabel(session.showingTrash ? "恢复：" + document.title : document.title)
-                        .contextMenu {
-                            if session.showingTrash { Button("恢复") { restore(document) } }
-                            else {
-                                Button(document.record.pinned ? "取消置顶" : "置顶") { try? workspace.setPinned(!document.record.pinned, for: document) }
-                                Button("移到回收站") { try? workspace.trash(document) }
-                            }
-                        }
-                    }
-                    if documents.isEmpty {
-                        VStack(spacing: 5) {
-                            Text(session.query.isEmpty ? (session.showingTrash ? "回收站为空" : "还没有便签") : "没有匹配的便签").foregroundStyle(OrielPalette.mutedText)
-                            if !session.query.isEmpty { Button("清除搜索") { session.query = "" } }
-                            else if !session.showingTrash { Button("新建便签") { open(workspace.create()) } }
-                        }.padding(8).frame(maxWidth: .infinity)
-                    }
-                }
-            }
-        }
-    }
-
-    private func preview(_ document: NoteDocument) -> String {
-        let lines = document.text.split(whereSeparator: \.isNewline)
-        return lines.dropFirst().first.map(String.init) ?? (document.text.isEmpty ? "空白便签" : "")
-    }
-
     private func restore(_ document: NoteDocument) {
         do { try workspace.restore(document); open(document) }
         catch { /* The document retains its state and error. */ }
@@ -216,6 +310,51 @@ struct NotesView: View {
         if alert.runModal() == .alertSecondButtonReturn { workspace.revealStorage() }
         workspace.acknowledgeRecovery()
     }
+}
+
+/// A calm empty state: light line icon, short copy and one accent action.
+private struct NotesEmptyState: View {
+    let icon: String
+    let title: String
+    var detail: String? = nil
+    var actionTitle: String? = nil
+    var action: () -> Void = {}
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 26, weight: .light))
+                .foregroundStyle(OrielPalette.mutedText).padding(.bottom, 2)
+            Text(title).font(.system(size: 12, weight: .medium))
+            if let detail {
+                Text(detail).font(.system(size: 10))
+                    .foregroundStyle(OrielPalette.mutedText).multilineTextAlignment(.center)
+            }
+            if let actionTitle {
+                Button(actionTitle, action: action)
+                    .foregroundStyle(OrielPalette.tint).padding(.top, 3)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+}
+
+/// Rows are grouped by spacing and a rounded hover fill instead of rules.
+private struct NotesRowHighlight: ViewModifier {
+    @State private var hovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(hovered ? Color(nsColor: OrielPalette.hover).opacity(0.65) : .clear,
+                        in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+            .onHover { hovered = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovered)
+    }
+}
+
+private extension View {
+    func notesRow() -> some View { modifier(NotesRowHighlight()) }
 }
 
 private struct NoteStatus: View {
