@@ -56,6 +56,54 @@ final class ReaderViewportTests: XCTestCase {
 }
 
 extension ReaderViewportTests {
+    func testOneWheelEventKeepsPartOfTheCurrentPassageVisible() throws {
+        _ = NSApplication.shared
+        let chapter = try XCTUnwrap(NovelText.chapters(data: Data(("第一章\n" +
+            (0..<120).map { "段落\($0)。沿着河岸继续走。" }.joined(separator: "\n\n")).utf8)).first)
+        let host = NSHostingView(rootView: page(chapter))
+        host.sizingOptions = []
+        let panel = NSPanel(contentRect: NSRect(x: -4000, y: -4000, width: 272, height: 274),
+                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        panel.contentView = host
+        panel.makeKeyAndOrderFront(nil)
+        host.layoutSubtreeIfNeeded()
+        let scroll = try XCTUnwrap(descendants(host).compactMap { $0 as? NovelPageScroll }.first)
+        let document = try XCTUnwrap(scroll.documentView)
+        let viewport = scroll.contentSize.height
+        // Let the first-responder restore settle, then start mid-document so the
+        // assertions are about scrolling, not about the top edge.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertGreaterThan(document.frame.height - viewport, viewport * 2,
+                             "This test needs a document several screens tall.")
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: viewport * 1.5))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        let before = scroll.documentVisibleRect.minY
+        XCTAssertGreaterThan(before, viewport)
+
+        let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1,
+                                         wheel1: -12, wheel2: 0, wheel3: 0))
+        let event = try XCTUnwrap(NSEvent(cgEvent: wheel))
+        document.scrollWheel(with: event)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        let during = scroll.documentVisibleRect.minY - before
+        XCTAssertGreaterThan(during, 0)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        let moved = scroll.documentVisibleRect.minY - before
+        XCTAssertGreaterThan(moved, during)
+        XCTAssertGreaterThanOrEqual(moved, 20, "A wheel event must move at least a readable step.")
+        XCTAssertLessThanOrEqual(moved, viewport * 0.45,
+                                 "A single wheel event must not discard the entire visible passage.")
+        let reverseWheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1,
+                                                wheel1: 12, wheel2: 0, wheel3: 0))
+        document.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: reverseWheel)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        XCTAssertLessThan(scroll.documentVisibleRect.minY, before + moved)
+        XCTAssertEqual(scroll.documentVisibleRect.minY, before, accuracy: 1,
+                       "The reverse event must land back on the previous position.")
+    }
+
     func testSpaceContinuesToNextChapterWhenThePageAlreadyFits() throws {
         _ = NSApplication.shared
         let chapter = try XCTUnwrap(NovelText.chapters(data: Data("第一回\n天晴了。".utf8)).first)

@@ -47,6 +47,10 @@ final class NovelLibrary: ObservableObject {
         return box
     }
 
+    func invalidateChapters(for book: ShelfBook) {
+        openBooks.removeObject(forKey: book.id as NSString)
+    }
+
     /// The latest reading place, including a scroll position not yet written.
     func place(for book: String) -> ReadingPlace {
         pendingPlaces[book] ?? places.place(for: book)
@@ -116,7 +120,7 @@ final class NovelLibrary: ObservableObject {
 
 @MainActor
 final class NovelSession: ObservableObject {
-    enum Section { case shelf, catalog, reading, contents, bookmarks, search }
+    enum Section { case shelf, reading, contents, bookmarks, search }
     let library: NovelLibrary
     @Published var section: Section = .shelf
     @Published var notice: String?
@@ -135,12 +139,11 @@ final class NovelSession: ObservableObject {
     private var filePanel: NSOpenPanel?
     private var removalSubscription: AnyCancellable?
     private var openingBookID: String?
-    private enum Request { case files([URL]), catalog(CatalogNovel), saved(ShelfBook), replaceLocal, replaceOnline(CatalogNovel) }
+    private enum Request { case files([URL]), saved(ShelfBook), replaceLocal(ShelfBook) }
     private var retryRequest: Request?
     var retryTitle: String? {
         switch retryRequest {
         case .replaceLocal: "重新导入"
-        case .replaceOnline: "重新下载"
         case nil: nil
         default: "重试"
         }
@@ -167,29 +170,38 @@ final class NovelSession: ObservableObject {
         run(label: nil) { [self] in
             try await library.refresh()
             try Task.checkCancellation()
-            if library.books.isEmpty { section = .catalog }
         }
     }
 
-    func importFile(in window: NSWindow) {
+    func importFile(in window: NSWindow, replacing book: ShelfBook? = nil) {
         guard filePanel == nil else { return }
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.plainText, UTType(filenameExtension: "epub")!]
+        panel.allowedContentTypes = book?.sourceID == nil ? [.plainText, UTType(filenameExtension: "epub")!] : [.plainText]
         panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = true
+        panel.allowsMultipleSelection = book == nil
         panel.prompt = "导入"
-        panel.message = "选择 TXT 或 EPUB 小说"
+        if let book {
+            panel.message = book.sourceID == nil ? "选择导入时的原文件以修复本书" : "选择同版书籍的原始 TXT 文件"
+        } else {
+            panel.message = "选择 TXT 或 EPUB 小说"
+        }
         filePanel = panel
         panel.beginSheetModal(for: window) { [weak self, weak panel] result in
             guard let self, let panel, self.filePanel === panel else { return }
             self.filePanel = nil
-            if result == .OK { self.openFiles(panel.urls) }
+            if result == .OK { self.openFiles(panel.urls, replacing: book) }
         }
     }
 
-    func openFiles(_ urls: [URL]) {
+    func openFiles(_ urls: [URL], replacing book: ShelfBook? = nil) {
         guard let first = urls.first else { return }
-        run(label: "正在导入", retry: .files(urls)) { [self] in
+        run(label: "正在导入", retry: book.map(Request.replaceLocal) ?? .files(urls)) { [self] in
+            if let book {
+                let repaired = try await library.shelf.replace(file: first, of: book)
+                library.invalidateChapters(for: book)
+                try await present(repaired)
+                return
+            }
             if urls.count == 1 {
                 let imported = try await library.shelf.add(file: first)
                 try await present(imported)
@@ -219,13 +231,6 @@ final class NovelSession: ObservableObject {
 
     private func importProgress(_ index: Int, total: Int) {
         if !Task.isCancelled { busy = "正在导入 \(index) / \(total)" }
-    }
-
-    func open(_ source: CatalogNovel, fetchAgain: Bool = false) {
-        run(label: "正在获取《\(source.title)》", retry: fetchAgain ? .replaceOnline(source) : .catalog(source)) { [self] in
-            let saved = try await NovelCatalogLoader(shelf: library.shelf).open(source, fetchAgain: fetchAgain)
-            try await present(saved)
-        }
     }
 
     func open(_ saved: ShelfBook) {
@@ -308,21 +313,11 @@ final class NovelSession: ObservableObject {
         }
     }
 
-    func showOriginal() {
-        guard let book else { return }
-        run(label: nil) { [self] in
-            let url = try await library.shelf.original(of: book)
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        }
-    }
-
-    func retry(chooseFile: () -> Void) {
+    func retry(chooseFile: (ShelfBook?) -> Void) {
         switch retryRequest {
         case .files(let urls): openFiles(urls)
-        case .catalog(let source): open(source)
         case .saved(let saved): open(saved)
-        case .replaceLocal: chooseFile()
-        case .replaceOnline(let source): open(source, fetchAgain: true)
+        case .replaceLocal(let book): chooseFile(book)
         case nil: break
         }
     }
@@ -357,58 +352,13 @@ final class NovelSession: ObservableObject {
             do { try await action() }
             catch {
                 if !Task.isCancelled {
-                    if case ReadingError.damaged = error, case let .saved(book) = retry {
-                        self?.retryRequest = CatalogNovel.edition(of: book).map(Request.replaceOnline) ?? .replaceLocal
-                    } else if case ReadingError.damaged = error, case let .catalog(source) = retry {
-                        self?.retryRequest = .replaceOnline(source)
+                    if case ReadingError.damaged = error, case .saved(let book) = retry {
+                        self?.retryRequest = .replaceLocal(book)
                     } else { self?.retryRequest = retry }
                     self?.notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 }
             }
             if !Task.isCancelled { self?.busy = nil; self?.work = nil }
-        }
-    }
-}
-
-@MainActor
-final class CatalogDiscovery: ObservableObject {
-    @Published private(set) var results: [CatalogNovel] = []
-    @Published private(set) var searching = false
-    @Published private(set) var searched = false
-    @Published private(set) var failed = false
-    @Published private(set) var next: Int?
-    private var task: Task<Void, Never>?
-
-    func reset() {
-        task?.cancel()
-        task = nil
-        results = []
-        searching = false
-        searched = false
-        failed = false
-        next = nil
-    }
-
-    func search(_ query: String, from start: Int = 1) {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        if start == 1 { reset() }
-        task?.cancel()
-        searching = true
-        failed = false
-        task = Task { [weak self] in
-            do {
-                let page = try await CatalogSearch.search(query, start: start)
-                guard let self, !Task.isCancelled else { return }
-                let seen = Set(results.map(\.id))
-                results += page.books.filter { !seen.contains($0.id) }
-                next = page.next.flatMap { $0 > start ? $0 : nil }
-                searched = true
-            } catch {
-                guard !Task.isCancelled else { return }
-                self?.failed = true
-            }
-            self?.searching = false
-            self?.task = nil
         }
     }
 }

@@ -1,5 +1,7 @@
 # 小窗小说验收
 
+> 本页是在线书库仍存在时的历史验收记录。当前版本只支持本地导入，现行行为以 [小说规格](../specs/010-novel-reader.md) 为准。
+
 2026-11-07，Apple M4 Mac mini、macOS 26.6.2（25G83）、Xcode 27.2、Swift 6.4.2。窗口操作使用独立应用标识的 Oriel，在单台显示器上以系统鼠标、键盘、辅助功能树和 WindowServer 核对。实测书、测试书签与个人书架分开保存。
 
 ![280 × 360 pt 在线书库](novel-reader/catalog.png)　![相同大小、16 pt 原文阅读](novel-reader/reading.png)

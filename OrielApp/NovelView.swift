@@ -5,10 +5,9 @@ import OrielReaderUI
 struct NovelView: View {
     @ObservedObject var session: NovelSession
     @ObservedObject var library: NovelLibrary
-    var chooseFile: () -> Void
+    var chooseFile: (ShelfBook?) -> Void
     @AppStorage("novel.simplified") private var simplified = false
     @AppStorage("novel.font.size") private var fontSize = 13
-    @StateObject private var discovery = CatalogDiscovery()
     @State private var query = ""
     @State private var removing: ShelfBook?
     private let accent = OrielPalette.tint
@@ -34,8 +33,8 @@ struct NovelView: View {
                     Spacer(minLength: 0)
                 } else {
                     switch session.section {
-                    case .shelf, .catalog:
-                        if geometry.size.height < 68 { pocketShelf } else { libraryView(width: geometry.size.width) }
+                    case .shelf:
+                        if geometry.size.height < 68 { pocketShelf } else { shelfView(width: geometry.size.width) }
                     case .contents:
                         if geometry.size.height < 68 { pocketNavigation(bookmarks: false) } else { contents }
                     case .bookmarks:
@@ -67,8 +66,6 @@ struct NovelView: View {
         .tint(accent)
         .buttonStyle(.plain)
         .onAppear { session.start() }
-        .onDisappear { discovery.reset() }
-        .onChange(of: query) { _, _ in discovery.reset() }
         .onChange(of: session.section) { _, _ in query = "" }
         .onChange(of: library.books) { _, books in
             if let selected = session.book, !books.contains(selected) { session.showShelf() }
@@ -82,60 +79,37 @@ struct NovelView: View {
         }.accessibilityLabel(label).help(label)
     }
 
-    private func libraryView(width: CGFloat) -> some View {
+    private func shelfView(width: CGFloat) -> some View {
         let filter = NovelQuery(query)
         return VStack(spacing: 0) {
             HStack(spacing: width < 160 ? 2 : 8) {
-                sectionButton("书架", .shelf)
-                sectionButton("书库", .catalog)
+                Text("书架").fontWeight(.semibold)
                 Spacer(minLength: 0)
-                icon("square.and.arrow.down", "导入 TXT 或 EPUB", action: chooseFile)
+                icon("square.and.arrow.down", "导入 TXT 或 EPUB") { chooseFile(nil) }
             }.padding(.horizontal, width < 160 ? 2 : 7)
             Divider()
-            if session.section == .shelf && library.books.isEmpty {
+            if library.books.isEmpty {
                 ScrollView {
                     VStack(spacing: 6) {
                         Image(systemName: "books.vertical").font(.title2).foregroundStyle(accent)
                         Text("书架还是空的").fontWeight(.medium)
-                        Button("导入本地书", action: chooseFile).foregroundStyle(accent)
-                        Button("去书库选书") { session.section = .catalog }.foregroundStyle(OrielPalette.mutedText)
+                        Button("导入本地书") { chooseFile(nil) }.foregroundStyle(accent)
                     }.frame(maxWidth: .infinity).padding(.vertical, 14)
                 }
             } else {
-                if session.section == .catalog || library.books.count > 5 {
-                    searchBox("搜书名或作者")
-                        .onSubmit { if session.section == .catalog { discovery.search(query) } }
-                }
+                if library.books.count > 5 || !query.isEmpty { searchBox("搜书名或作者") }
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        if session.section == .catalog {
-                            let sources = CatalogNovel.all.filter { filter.matches($0.title + $0.originalTitle + $0.author) }
-                            let localIDs = Set(sources.map(\.id))
-                            let found = sources + discovery.results.filter { !localIDs.contains($0.id) }
-                            ForEach(found) { source in
-                                let saved = library.books.first { $0.sourceID == source.id }
-                                row(title: source.title, detail: source.author, mark: saved == nil ? "arrow.down.to.line" : "checkmark",
-                                    color: color(source.id), width: width) {
-                                    if let saved { session.open(saved) } else { session.open(source) }
-                                }
-                            }
-                            if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                discoveryFooter(empty: found.isEmpty)
-                            }
-                            Text("Project Gutenberg").font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                        } else {
-                            let books = library.recent.filter { filter.matches($0.title + ($0.author ?? "")) }
-                            ForEach(books) { book in
-                                let progress = library.place(for: book.id)
-                                let detail = progress.updated == nil ? "\(book.chapterCount) 节" : "读到 \(progress.chapter + 1) / \(book.chapterCount)"
-                                row(title: book.title, detail: detail, mark: "chevron.right",
-                                    color: color(book.sourceID ?? book.id.utf8.reduce(0) { $0 + Int($1) }), width: width) {
-                                    session.open(book)
-                                }.contextMenu { Button("从书架移除") { removing = book } }
-                            }
-                            if books.isEmpty { Text("没有匹配的书").foregroundStyle(OrielPalette.mutedText).padding(8) }
+                        let books = library.recent.filter { filter.matches($0.title + ($0.author ?? "")) }
+                        ForEach(books) { book in
+                            let progress = library.place(for: book.id)
+                            let detail = progress.updated == nil ? "\(book.chapterCount) 节" : "读到 \(progress.chapter + 1) / \(book.chapterCount)"
+                            row(title: book.title, detail: detail, mark: "chevron.right",
+                                color: color(book.id.utf8.reduce(0) { $0 + Int($1) }), width: width) {
+                                session.open(book)
+                            }.contextMenu { Button("从书架移除") { removing = book } }
                         }
+                        if books.isEmpty { Text("没有匹配的书").foregroundStyle(OrielPalette.mutedText).padding(8) }
                     }
                 }
             }
@@ -145,32 +119,6 @@ struct NovelView: View {
             session.openFiles(urls)
             return true
         }
-    }
-
-    @ViewBuilder private func discoveryFooter(empty: Bool) -> some View {
-        if discovery.searching {
-            HStack(spacing: 5) { ProgressView().controlSize(.small); Button("取消", action: discovery.reset) }.padding(6)
-        } else if discovery.failed {
-            Button("书库暂时无法连接 · 重试") { discovery.search(query, from: discovery.next ?? 1) }
-                .foregroundStyle(accent).padding(6)
-        } else if !discovery.searched {
-            Button("搜索全部中文藏书") { discovery.search(query) }.foregroundStyle(accent).padding(6)
-        } else if let next = discovery.next {
-            Button("更多结果") { discovery.search(query, from: next) }.foregroundStyle(accent).padding(6)
-        } else if empty {
-            Text("没有匹配的书").foregroundStyle(OrielPalette.mutedText).padding(6)
-        }
-    }
-
-    private func sectionButton(_ title: String, _ section: NovelSession.Section) -> some View {
-        Button { session.section = section; session.notice = nil } label: {
-            Text(title).fontWeight(session.section == section ? .semibold : .regular)
-                .foregroundStyle(session.section == section ? OrielPalette.text : OrielPalette.mutedText)
-                .padding(.horizontal, 2).frame(height: 25)
-                .overlay(alignment: .bottom) {
-                    if session.section == section { Capsule().fill(accent).frame(height: 2) }
-                }
-        }.accessibilityAddTraits(session.section == section ? .isSelected : [])
     }
 
     private func color(_ id: Int) -> Color {
@@ -214,12 +162,9 @@ struct NovelView: View {
 
     private var pocketShelf: some View {
         Menu {
-            Button("导入 TXT 或 EPUB", action: chooseFile)
+            Button("导入 TXT 或 EPUB") { chooseFile(nil) }
             if !library.books.isEmpty {
                 Section("书架") { ForEach(library.recent) { book in Button(book.title) { session.open(book) } } }
-            }
-            Menu("在线书库") {
-                ForEach(CatalogNovel.all) { book in Button(book.title) { session.open(book) } }
             }
         } label: {
             Label("选书", systemImage: "books.vertical").padding(3)
@@ -294,10 +239,6 @@ struct NovelView: View {
                 }
             }
             Toggle("简体阅读", isOn: $simplified)
-            if let source = book.sourcePage {
-                Link("书源 · Project Gutenberg", destination: source)
-                Button("在访达中查看原文") { session.showOriginal() }
-            }
             Button("从书架移除") { removing = book }
         } label: {
             Image(systemName: pocket ? "ellipsis" : "textformat.size").frame(width: pocket ? 16 : 23, height: 22)

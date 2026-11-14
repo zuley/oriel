@@ -6,8 +6,8 @@ public struct ShelfBook: Codable, Identifiable, Equatable, Sendable {
     public let title: String
     public let author: String?
     public let chapterCount: Int
+    /// Kept to decode books saved by versions that offered online downloads.
     public let sourceID: Int?
-    public var sourcePage: URL? { sourceID.flatMap { URL(string: "https://www.gutenberg.org/ebooks/\($0)") } }
     public let added: Date
 }
 
@@ -38,6 +38,12 @@ public actor NovelShelf {
         let granted = file.startAccessingSecurityScopedResource()
         defer { if granted { file.stopAccessingSecurityScopedResource() } }
         return try add(data: Self.readFile(file), name: file.lastPathComponent)
+    }
+
+    public func replace(file: URL, of book: ShelfBook) throws -> ShelfBook {
+        let granted = file.startAccessingSecurityScopedResource()
+        defer { if granted { file.stopAccessingSecurityScopedResource() } }
+        return try importBook(data: Self.readFile(file), name: file.lastPathComponent, replacing: book)
     }
 
     public func add(files urls: [URL], progress: @Sendable (Int) async -> Void = { _ in }) async throws -> NovelImportResult {
@@ -71,41 +77,54 @@ public actor NovelShelf {
         return data
     }
 
-    public func add(data: Data, name: String, source: CatalogNovel? = nil) throws -> ShelfBook {
+    public func add(data: Data, name: String) throws -> ShelfBook {
+        try importBook(data: data, name: name, replacing: nil)
+    }
+
+    private func importBook(data: Data, name: String, replacing target: ShelfBook?) throws -> ShelfBook {
         try Task.checkCancellation()
         guard data.count <= NovelText.limit else { throw ReadingError.oversized }
+        if let target { _ = try directory(of: target) }
         let fileName = URL(fileURLWithPath: name)
-        let id = source.map { "pg-\($0.id)" } ?? SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let id = target?.id ?? hash
         let final = root.appending(path: id)
         let exists = files.fileExists(atPath: final.path)
         let prior = exists ? (try? metadata(at: final)).flatMap { $0.id == id ? $0 : nil } : nil
-        if let prior {
+        if let target {
+            // The metadata file may itself be what is damaged; the folder name is the identity.
+            guard exists else { throw ReadingError.damaged }
+            if let sourceID = target.sourceID {
+                let header = String(decoding: data.prefix(8192), as: UTF8.self)
+                guard target.id == "pg-\(sourceID)", fileName.pathExtension.lowercased() == "txt",
+                      header.localizedCaseInsensitiveContains("[ebook #\(sourceID)]") else {
+                    throw ReadingError.wrongEdition
+                }
+            } else {
+                guard hash == target.id else { throw ReadingError.wrongEdition }
+            }
+        } else if let prior {
             do { _ = try chapters(of: prior); return prior }
             catch ReadingError.damaged { /* Rebuild this edition from the supplied original. */ }
         }
         let parsed: ParsedNovel
         switch fileName.pathExtension.lowercased() {
         case "txt":
-            if let source {
-                // Reject HTML, error pages and accidentally substituted editions.
-                let header = String(decoding: data.prefix(8192), as: UTF8.self)
-                guard header.localizedCaseInsensitiveContains("[ebook #\(source.id)]") else { throw ReadingError.damaged }
-            }
-            parsed = try ParsedNovel(title: source?.title, author: source?.author,
-                                     chapters: NovelText.chapters(data: data, gutenberg: source != nil))
+            parsed = try ParsedNovel(title: nil, author: nil,
+                                     chapters: NovelText.chapters(data: data, legacyGutenberg: target?.sourceID != nil))
         case "epub": parsed = try NovelEPUB.read(data)
         default: throw ReadingError.unsupported
         }
         let fallbackTitle = fileName.deletingPathExtension().lastPathComponent
-        let book = ShelfBook(id: id, title: prior?.title ?? parsed.title.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackTitle,
-                             author: parsed.author, chapterCount: parsed.chapters.count, sourceID: source?.id, added: prior?.added ?? Date())
+        let book = ShelfBook(id: id, title: prior?.title ?? target?.title ?? parsed.title.flatMap { $0.isEmpty ? nil : $0 } ?? fallbackTitle,
+                             author: target?.author ?? parsed.author, chapterCount: parsed.chapters.count,
+                             sourceID: target?.sourceID, added: prior?.added ?? target?.added ?? Date())
         let staging = root.appending(path: ".import-" + UUID().uuidString)
         try files.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? files.removeItem(at: staging) }
         let encoder = JSONEncoder()
         try encoder.encode(parsed.chapters).write(to: staging.appending(path: "chapters.json"))
         try encoder.encode(book).write(to: staging.appending(path: "book.json"))
-        if source != nil { try data.write(to: staging.appending(path: "original.txt")) }
         try Task.checkCancellation()
         if exists { _ = try files.replaceItemAt(final, withItemAt: staging) }
         else { try files.moveItem(at: staging, to: final) }
@@ -144,8 +163,6 @@ public actor NovelShelf {
     }
 
     public func remove(_ book: ShelfBook) throws { try files.removeItem(at: directory(of: book)) }
-
-    public func original(of book: ShelfBook) throws -> URL { try directory(of: book).appending(path: "original.txt") }
 
     private func directory(of book: ShelfBook) throws -> URL {
         guard !book.id.isEmpty, book.id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else {

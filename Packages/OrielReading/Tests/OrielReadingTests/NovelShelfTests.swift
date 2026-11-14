@@ -3,6 +3,145 @@ import OrielReading
 
 @MainActor
 final class NovelShelfTests: XCTestCase {
+    func testPreviouslyDownloadedBookRemainsReadableFromLocalShelf() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "pg-42")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let metadata = #"{"id":"pg-42","title":"旧版本藏书","author":null,"chapterCount":1,"sourceID":42,"added":0}"#
+        try Data(metadata.utf8).write(to: folder.appending(path: "book.json"))
+        let chapters = try NovelText.chapters(data: Data("第一章\n本地副本仍可阅读。".utf8))
+        try JSONEncoder().encode(chapters).write(to: folder.appending(path: "chapters.json"))
+
+        let shelf = NovelShelf(root: root)
+        let books = try await shelf.books()
+        let saved = try XCTUnwrap(books.first)
+        XCTAssertEqual(saved.sourceID, 42)
+        let reopened = try await shelf.chapters(of: saved)
+        XCTAssertEqual(reopened.first?.text, "本地副本仍可阅读。")
+    }
+
+    func testDamagedLegacyBookIsRepairedInPlaceFromMatchingLocalOriginal() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "pg-42")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let metadata = #"{"id":"pg-42","title":"旧版本藏书","author":"原作者","chapterCount":2,"sourceID":42,"added":0}"#
+        try Data(metadata.utf8).write(to: folder.appending(path: "book.json"))
+        try Data().write(to: folder.appending(path: "chapters.json"))
+        let original = root.appending(path: "原书.txt")
+        let text = """
+        The Project Gutenberg eBook [eBook #42]
+        *** START OF THE PROJECT GUTENBERG EBOOK 示例 ***
+        第一章 出发
+        第一段。
+        第二章 抵达
+        第二段。
+        *** END OF THE PROJECT GUTENBERG EBOOK 示例 ***
+        """
+        try Data(text.utf8).write(to: original)
+        let shelf = NovelShelf(root: root)
+        let existing = try await shelf.books()
+        let saved = try XCTUnwrap(existing.first)
+        let repaired = try await shelf.replace(file: original, of: saved)
+        XCTAssertEqual(repaired.id, saved.id)
+        XCTAssertEqual(repaired.title, saved.title)
+        XCTAssertEqual(repaired.author, saved.author)
+        XCTAssertEqual(repaired.sourceID, saved.sourceID)
+        let books = try await shelf.books()
+        XCTAssertEqual(books.count, 1)
+        let chapters = try await shelf.chapters(of: repaired)
+        XCTAssertEqual(chapters.map(\.text), ["第一段。", "第二段。"])
+    }
+
+    func testLegacyRepairRejectsAnotherEditionWithoutChangingDamagedCopy() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appending(path: "pg-42")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let metadata = #"{"id":"pg-42","title":"旧版本藏书","author":null,"chapterCount":1,"sourceID":42,"added":0}"#
+        try Data(metadata.utf8).write(to: folder.appending(path: "book.json"))
+        try Data().write(to: folder.appending(path: "chapters.json"))
+        let wrong = root.appending(path: "另一版.txt")
+        try Data("[eBook #43]\n第一章\n其他内容。".utf8).write(to: wrong)
+        let shelf = NovelShelf(root: root)
+        let existing = try await shelf.books()
+        let saved = try XCTUnwrap(existing.first)
+        do { _ = try await shelf.replace(file: wrong, of: saved); XCTFail("Wrong edition replaced the old book") }
+        catch ReadingError.wrongEdition {}
+        let books = try await shelf.books()
+        XCTAssertEqual(books, [saved])
+        XCTAssertEqual(try Data(contentsOf: folder.appending(path: "chapters.json")), Data())
+    }
+
+    func testDamagedLocalBookIsRepairedInPlaceFromTheSameFile() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let text = Data("第一章 出发\n第一段。\n第二章 抵达\n第二段。".utf8)
+        let shelf = NovelShelf(root: root)
+        _ = try await shelf.add(data: text, name: "本地书.txt")
+        let existing = try await shelf.books()
+        let saved = try XCTUnwrap(existing.first)
+        try Data().write(to: root.appending(path: saved.id).appending(path: "chapters.json"))
+        // The same bytes under another name still identify the same book.
+        let original = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".txt")
+        defer { try? FileManager.default.removeItem(at: original) }
+        try text.write(to: original)
+
+        let repaired = try await shelf.replace(file: original, of: saved)
+        XCTAssertEqual(repaired.id, saved.id)
+        XCTAssertEqual(repaired.title, saved.title)
+        XCTAssertEqual(repaired.chapterCount, 2)
+        XCTAssertEqual(repaired.added, saved.added)
+        let books = try await shelf.books()
+        XCTAssertEqual(books, [repaired])
+        let chapters = try await shelf.chapters(of: repaired)
+        XCTAssertEqual(chapters.map(\.text), ["第一段。", "第二段。"])
+    }
+
+    func testLocalRepairRejectsAnotherFileWithoutChangingDamagedCopy() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shelf = NovelShelf(root: root)
+        _ = try await shelf.add(data: Data("第一章\n原文。".utf8), name: "本地书.txt")
+        let existing = try await shelf.books()
+        let saved = try XCTUnwrap(existing.first)
+        let chapters = root.appending(path: saved.id).appending(path: "chapters.json")
+        try Data().write(to: chapters)
+        let other = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".txt")
+        defer { try? FileManager.default.removeItem(at: other) }
+        try Data("第一章\n别的内容。".utf8).write(to: other)
+
+        do { _ = try await shelf.replace(file: other, of: saved); XCTFail("Another file replaced the damaged book") }
+        catch ReadingError.wrongEdition {}
+        let books = try await shelf.books()
+        XCTAssertEqual(books, [saved])
+        XCTAssertEqual(try Data(contentsOf: chapters), Data())
+    }
+
+    func testRepairRebuildsMetadataThatItselfWentMissing() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let text = Data("第一章\n原文。".utf8)
+        let shelf = NovelShelf(root: root)
+        _ = try await shelf.add(data: text, name: "本地书.txt")
+        let existing = try await shelf.books()
+        let saved = try XCTUnwrap(existing.first)
+        let folder = root.appending(path: saved.id)
+        try FileManager.default.removeItem(at: folder.appending(path: "book.json"))
+        try Data().write(to: folder.appending(path: "chapters.json"))
+        let original = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".txt")
+        defer { try? FileManager.default.removeItem(at: original) }
+        try text.write(to: original)
+
+        let repaired = try await shelf.replace(file: original, of: saved)
+        XCTAssertEqual(repaired.title, saved.title)
+        XCTAssertEqual(repaired.added, saved.added)
+        let books = try await shelf.books()
+        XCTAssertEqual(books.map(\.id), [saved.id])
+        XCTAssertEqual(books.map(\.title), [saved.title])
+    }
+
     func testReopenWithoutOriginalDeduplicatesAndRemovesOnlyLibraryCopy() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

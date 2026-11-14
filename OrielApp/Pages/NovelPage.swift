@@ -1,6 +1,6 @@
 import AppKit
 
-/// The bookshelf, online catalog and reader.
+/// The local bookshelf and reader.
 @MainActor
 final class NovelPage: TabPage {
     let kind = PageKind.novel
@@ -14,9 +14,9 @@ final class NovelPage: TabPage {
         let session = NovelSession(library: library)
         self.session = session
         weak var page: NovelPage?
-        view = pageHostingView(NovelView(session: session, library: library, chooseFile: { [weak host] in
+        view = pageHostingView(NovelView(session: session, library: library, chooseFile: { [weak host] book in
             guard let host, let page, host.canManageTabs, host.isPresenting(page) else { return }
-            page.session.importFile(in: host.hostWindow)
+            page.session.importFile(in: host.hostWindow, replacing: book)
         }))
         page = self
         session.onBookChanged = { [weak self, weak host] in

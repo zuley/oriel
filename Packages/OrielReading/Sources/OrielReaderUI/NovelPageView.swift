@@ -50,6 +50,11 @@ public final class NovelPageScroll: NSScrollView {
     private var anchor = 0
     private var restoring = false
     private var onPosition: ((Int) -> Void)?
+    private var wheelTargetY: CGFloat?
+    private var wheelTimer: Timer?
+    /// Set while the wheel animation itself moves the clip view, so its own bounds
+    /// change does not look like a user scroll and cancel the animation.
+    private var wheelScrolling = false
 
     init() {
         storage.addLayoutManager(manager)
@@ -160,6 +165,7 @@ public final class NovelPageScroll: NSScrollView {
 
     public override func setFrameSize(_ newSize: NSSize) {
         guard bookID != nil, !restoring, frame.size != newSize else { super.setFrameSize(newSize); return }
+        stopWheelAnimation()
         let target = anchor
         // Only a chapter already laid out at a real width defers; the first layout is immediate.
         let deferring = reflowTimer != nil
@@ -193,6 +199,7 @@ public final class NovelPageScroll: NSScrollView {
     }
 
     private func restore(_ target: Int) {
+        stopWheelAnimation()
         reflowTimer?.invalidate()
         reflowTimer = nil
         if !container.widthTracksTextView {
@@ -219,7 +226,53 @@ public final class NovelPageScroll: NSScrollView {
         reflectScrolledClipView(contentView)
     }
 
+    public override func scrollWheel(with event: NSEvent) {
+        guard !event.hasPreciseScrollingDeltas, event.momentumPhase.isEmpty,
+              event.scrollingDeltaY != 0, reader.frame.height > contentSize.height else {
+            stopWheelAnimation()
+            super.scrollWheel(with: event)
+            return
+        }
+        // A mouse wheel can deliver a large accelerated delta in one event. Keep
+        // some of the current passage visible and ease successive steps together.
+        let step = min(max(20, abs(event.scrollingDeltaY) * 22), max(20, contentSize.height * 0.38))
+        let limit = reader.frame.height - contentSize.height
+        let base = wheelTargetY ?? contentView.bounds.minY
+        wheelTargetY = min(max(0, base + (event.scrollingDeltaY < 0 ? step : -step)), limit)
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            contentView.scroll(to: NSPoint(x: 0, y: wheelTargetY ?? base))
+            reflectScrolledClipView(contentView)
+            stopWheelAnimation()
+            return
+        }
+        guard wheelTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            MainActor.assumeIsolated {
+                guard let target = self.wheelTargetY else { self.stopWheelAnimation(); return }
+                let current = self.contentView.bounds.minY
+                let remaining = target - current
+                let next = abs(remaining) < 0.5 ? target : current + remaining * 0.28
+                self.wheelScrolling = true
+                self.contentView.scroll(to: NSPoint(x: 0, y: next))
+                self.reflectScrolledClipView(self.contentView)
+                self.wheelScrolling = false
+                if next == target { self.stopWheelAnimation() }
+            }
+        }
+        wheelTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopWheelAnimation() {
+        wheelTimer?.invalidate()
+        wheelTimer = nil
+        wheelTargetY = nil
+    }
+
     @objc private func scrolled() {
+        // A drag of the scroller must win over a wheel animation still in flight.
+        if !restoring && !wheelScrolling { stopWheelAnimation() }
         guard !restoring, window?.isVisible == true, !isHiddenOrHasHiddenAncestor,
               manager.numberOfGlyphs > 0, contentSize.height > 1 else { return }
         let y = max(0, contentView.bounds.minY - reader.textContainerOrigin.y)

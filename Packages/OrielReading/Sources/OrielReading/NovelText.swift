@@ -25,15 +25,15 @@ public struct NovelChapter: Codable, Equatable, Sendable {
 }
 
 public enum ReadingError: LocalizedError {
-    case empty, unreadable, oversized, unsupported, damaged, online
+    case empty, unreadable, oversized, unsupported, damaged, wrongEdition
     public var errorDescription: String? {
         switch self {
         case .empty: "这本书没有可读正文"
         case .unreadable: "文字编码无法识别，请另存为 UTF-8 后导入"
         case .oversized: "书籍太大，请选择 32 MB 以内的文字书"
         case .unsupported: "请选择 TXT 或无 DRM 的文字 EPUB"
-        case .damaged: "书籍结构不完整，请重新获取文件"
-        case .online: "暂时无法取书，请检查网络后重试"
+        case .damaged: "书籍结构不完整，请重新导入或选择原始文件修复"
+        case .wrongEdition: "请选择同版书籍的原始文件"
         }
     }
 }
@@ -45,12 +45,12 @@ public enum NovelText {
         pattern: #"^(?:第[零〇○一二两兩三四五六七八九十百千万萬廿卅壹贰叁\d]{1,12}([回章卷节節篇集部])|(?:楔子|序章|尾声|尾聲|后记|後記)(?:\s|$)|Chapter\s+(?:\d+|[IVXLCDM]+)\b)"#,
         options: [.caseInsensitive])
 
-    public static func chapters(data: Data, gutenberg: Bool = false) throws -> [NovelChapter] {
+    public static func chapters(data: Data, legacyGutenberg: Bool = false) throws -> [NovelChapter] {
         guard data.count <= limit else { throw ReadingError.oversized }
         let decoded = try decode(data)
         var lines = decoded.replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n").components(separatedBy: "\n")[...]
-        if gutenberg {
+        if legacyGutenberg {
             guard let start = lines.firstIndex(where: { $0.hasPrefix("*** START OF") }),
                   let end = lines.lastIndex(where: { $0.hasPrefix("*** END OF") }), start < end else {
                 throw ReadingError.damaged
@@ -85,10 +85,10 @@ public enum NovelText {
                 finish()
                 if kind == .volume { volume = line }
                 title = line
-            } else if gutenberg && !line.isEmpty {
+            } else if legacyGutenberg && !line.isEmpty {
                 guard !(line.hasPrefix("---") && line.allSatisfy({ $0 == "-" })) else { continue }
-                // Chinese Gutenberg editions hard-wrap print lines. Blank lines and indentation
-                // mark paragraphs; remove only those print wraps from these known editions.
+                // Older downloaded editions hard-wrap print lines. Blank lines and indentation
+                // mark paragraphs; remove only those wraps when repairing a legacy copy.
                 if !body.isEmpty, body.last != "", raw.first?.isWhitespace != true {
                     body[body.count - 1].append(line)
                 } else {

@@ -32,7 +32,7 @@ final class NovelTextTests: XCTestCase {
         XCTAssertEqual(chapters.map(\.text), ["船离了岸。", "她撑起伞。", "故人还在。"])
     }
 
-    func testCatalogPrintWrapsAndRepeatedRunningHeadingStayInOneChapter() throws {
+    func testLegacyDownloadedPrintWrapsAndRepeatedRunningHeadingStayInOneChapter() throws {
         let input = """
         *** START OF THE PROJECT GUTENBERG EBOOK 範例 ***
         Produced by example
@@ -45,21 +45,20 @@ final class NovelTextTests: XCTestCase {
         一切如常。
         *** END OF THE PROJECT GUTENBERG EBOOK 範例 ***
         """
-        let chapters = try NovelText.chapters(data: Data(input.utf8), gutenberg: true)
+        let chapters = try NovelText.chapters(data: Data(input.utf8), legacyGutenberg: true)
         XCTAssertEqual(chapters.map(\.title), ["第九十九回：夜雨", "第一○○回：重逢"])
         XCTAssertEqual(chapters.first?.text, "第四回中已經說過。天又亮了。")
     }
-}
 
-extension NovelTextTests {
-    func testLongNamedChapterKeepsOneEntryAndGutenbergPreservesActualPreface() throws {
+    func testLongLegacyChapterKeepsOneEntryAndPreservesActualPreface() throws {
         let prose = String(repeating: "山路有尽头，故事还很长。", count: 1800)
         let data = Data(("*** START OF THE PROJECT GUTENBERG EBOOK 山路 ***\n序言里有一则独立的故事，读它才能知道两个人为什么出发。\n第一回 出发\n" + prose +
             "\n*** END OF THE PROJECT GUTENBERG EBOOK 山路 ***").utf8)
-        let result = try NovelText.chapters(data: data, gutenberg: true)
+        let result = try NovelText.chapters(data: data, legacyGutenberg: true)
         XCTAssertEqual(result.map(\.title), ["序言", "第一回 出发"])
         XCTAssertEqual(result.last?.text.count, prose.count)
     }
+
 }
 
 extension NovelTextTests {
