@@ -4,85 +4,176 @@ import SwiftUI
 struct ManagementView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var state: ManagementState
+    @State private var hoveredSection: ManagementState.Section?
     private let accent = OrielPalette.tint
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
-                    if let url = Bundle.main.url(forResource: "OrielMark", withExtension: "pdf", subdirectory: "Brand"),
-                       let image = NSImage(contentsOf: url) {
-                        Image(nsImage: image).resizable().frame(width: 30, height: 30)
-                            .accessibilityHidden(true)
-                    }
-                    Text("Oriel").font(.system(size: 20, weight: .semibold))
-                }.padding(.horizontal, 8).padding(.top, 12).padding(.bottom, 12)
-                ForEach(ManagementState.Section.allCases) { section in
-                    Button { state.section = section } label: {
-                        Label(section.rawValue, systemImage: section.icon)
-                            .font(.system(size: 13, weight: section == state.section ? .semibold : .regular))
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: 34)
-                            .foregroundStyle(section == state.section ? accent : OrielPalette.text)
-                            .background(section == state.section ? Color(nsColor: OrielPalette.selection) : .clear, in: RoundedRectangle(cornerRadius: 6))
-                            .contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityAddTraits(section == state.section ? .isSelected : [])
-                }
-                Spacer()
-                Text("关闭主界面，小窗仍可用")
-                    .font(.system(size: 10)).foregroundStyle(OrielPalette.mutedText).padding(.horizontal, 12).padding(.bottom, 14)
-            }.padding(.horizontal, 8).frame(width: 164).background(Color(nsColor: OrielPalette.sidebar))
-            Divider()
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text(state.section.rawValue).font(.system(size: 22, weight: .semibold))
-                    Spacer()
-                }
-                Group {
-                    switch state.section {
-                    case .workspace: WorkspaceManagementView(model: model, isPresented: state.isPresented)
-                    case .settings: ManagementSettingsView(settings: model.preferences, model: model)
-                    }
-                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }.padding(24).background(Color(nsColor: OrielPalette.background))
+            sidebar
+            content
         }
         .foregroundStyle(OrielPalette.text)
+        .background(Color(nsColor: OrielPalette.background))
+        .ignoresSafeArea()
+    }
+
+    // MARK: Sidebar
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                if let url = Bundle.main.url(forResource: "OrielMark", withExtension: "pdf", subdirectory: "Brand"),
+                   let image = NSImage(contentsOf: url) {
+                    Image(nsImage: image).resizable().frame(width: 30, height: 30)
+                        .accessibilityHidden(true)
+                }
+                Text("Oriel").font(.system(size: 20, weight: .semibold))
+            }
+            .padding(.leading, 10)
+            .padding(.top, 40)
+            .padding(.bottom, 28)
+
+            VStack(spacing: 2) {
+                ForEach(ManagementState.Section.allCases) { section in
+                    sectionButton(section)
+                }
+            }
+            .padding(.horizontal, 8)
+
+            Spacer(minLength: 0)
+
+            Text("关闭主界面，小窗仍可用")
+                .font(.system(size: 10))
+                .foregroundStyle(OrielPalette.mutedText)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 16)
+        }
+        .frame(width: 164)
+        .frame(maxHeight: .infinity)
+        .background(Color(nsColor: OrielPalette.sidebar))
+    }
+
+    private func sectionButton(_ section: ManagementState.Section) -> some View {
+        let selected = section == state.section
+        return Button {
+            state.section = section
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 16)
+                    .foregroundStyle(selected ? accent : OrielPalette.mutedText)
+                Text(section.rawValue)
+                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? OrielPalette.text : OrielPalette.mutedText)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(background(for: section, selected: selected), in: RoundedRectangle(cornerRadius: 7))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { hoveredSection = section }
+            else if hoveredSection == section { hoveredSection = nil }
+        }
+        .animation(.easeOut(duration: 0.12), value: hoveredSection)
+        .animation(.easeOut(duration: 0.12), value: selected)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func background(for section: ManagementState.Section, selected: Bool) -> Color {
+        if selected { return Color(nsColor: OrielPalette.selection) }
+        return hoveredSection == section ? Color(nsColor: OrielPalette.hover).opacity(0.6) : .clear
+    }
+
+    // MARK: Content
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Group {
+                switch state.section {
+                case .workspace: WorkspaceManagementView(model: model, isPresented: state.isPresented)
+                case .settings: ManagementSettingsView(settings: model.preferences, model: model)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .padding(.top, 40)
+        .padding(.horizontal, 28)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: OrielPalette.background))
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(state.section.rawValue).font(.system(size: 22, weight: .semibold))
+                Text(subtitle).font(.system(size: 11)).foregroundStyle(OrielPalette.mutedText)
+            }
+            Spacer(minLength: 0)
+            if state.section == .workspace {
+                Button { model.create() } label: {
+                    Label("新建小窗", systemImage: "plus").font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(OrielPalette.tint)
+            }
+        }
+        .padding(.bottom, 24)
+    }
+
+    private var subtitle: String {
+        switch state.section {
+        case .workspace: "\(model.windows.count) 个小窗"
+        case .settings: "新小窗默认值与本地数据"
+        }
     }
 }
 
 private struct WorkspaceManagementView: View {
     @ObservedObject var model: AppModel
     let isPresented: Bool
+    @State private var hovered: UUID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("\(model.windows.count) 个小窗").foregroundStyle(OrielPalette.mutedText)
-                Spacer()
-                Button { model.create() } label: { Label("新建小窗", systemImage: "plus") }
-                    .buttonStyle(.borderedProminent).tint(OrielPalette.tint)
-            }
+        Group {
             if model.windows.isEmpty {
-                ManagementEmptyView(icon: "rectangle.on.rectangle", title: "还没有小窗", detail: "创建小窗后，在小窗中添加和使用内容。") { EmptyView() }
+                ManagementEmptyView(icon: "rectangle.on.rectangle", title: "还没有小窗",
+                                    detail: "创建小窗后，在小窗中添加和使用内容。") { EmptyView() }
             } else {
                 GeometryReader { viewport in
                     ScrollView([.vertical, .horizontal]) {
-                        ThumbnailFlowLayout(spacing: 20, wrapWidth: viewport.size.width) {
+                        ThumbnailFlowLayout(spacing: 26, wrapWidth: viewport.size.width) {
                             ForEach(model.windows) { window in
                                 ManagedWindowThumbnail(window: window, isPresented: isPresented,
-                                                       viewportSize: viewport.size)
+                                                       viewportSize: viewport.size,
+                                                       highlighted: hovered == window.id)
                                     .contentShape(Rectangle())
-                                    .onHover { model.hoverWindow(window.id, inside: $0) }
-                                    .onDisappear { model.hoverWindow(window.id, inside: false) }
+                                    .onHover { inside in
+                                        if inside { hovered = window.id }
+                                        else if hovered == window.id { hovered = nil }
+                                        model.hoverWindow(window.id, inside: inside)
+                                    }
+                                    .onDisappear {
+                                        if hovered == window.id { hovered = nil }
+                                        model.hoverWindow(window.id, inside: false)
+                                    }
                             }
                         }
-                        .padding(.bottom, 8)
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 8)
                         .frame(minWidth: viewport.size.width, minHeight: viewport.size.height,
                                alignment: .topLeading)
                     }.coordinateSpace(name: "thumbnailViewport")
                 }
             }
-        }.font(.system(size: 12))
-            .onDisappear { model.clearWindowHover() }
+        }
+        .font(.system(size: 12))
+        .onDisappear { model.clearWindowHover() }
     }
 }
 
@@ -130,6 +221,7 @@ private struct ManagedWindowThumbnail: View {
     @ObservedObject var window: MiniWindowSession
     let isPresented: Bool
     let viewportSize: CGSize
+    let highlighted: Bool
     private let refresh = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
     @State private var isInViewport = false
     @State private var closing = false
@@ -138,12 +230,13 @@ private struct ManagedWindowThumbnail: View {
     var body: some View {
         if let snapshot = window.snapshot {
             Button { window.showFromWorkspace() } label: {
-                WindowThumbnail(windowSize: snapshot.frame.size, image: window.thumbnail)
+                WindowThumbnail(windowSize: snapshot.frame.size, image: window.thumbnail, highlighted: highlighted)
+                    .opacity(snapshot.isVisible ? 1 : 0.42)
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())
-            .help(window.name)
-            .accessibilityLabel(window.name)
+            .help(snapshot.isVisible ? window.name : "\(window.name) · 已隐藏")
+            .accessibilityLabel(snapshot.isVisible ? window.name : "\(window.name)，已隐藏")
             .contextMenu {
                 Button(snapshot.isVisible ? "隐藏" : "显示") {
                     if snapshot.isVisible { window.hide() }
@@ -188,7 +281,9 @@ private struct ManagedWindowThumbnail: View {
 private struct WindowThumbnail: View {
     let windowSize: CGSize
     let image: NSImage?
-    private let height: CGFloat = 220
+    let highlighted: Bool
+    private let height: CGFloat = 240
+    private let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
 
     private var width: CGFloat {
         height * max(windowSize.width, 1) / max(windowSize.height, 1)
@@ -202,8 +297,16 @@ private struct WindowThumbnail: View {
             }
         }
         .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: OrielPalette.divider), lineWidth: 1) }
+        .clipShape(shape)
+        .overlay {
+            shape.strokeBorder(Color.black.opacity(0.07), lineWidth: highlighted ? 0 : 0.5)
+        }
+        .overlay {
+            shape.strokeBorder(OrielPalette.tint, lineWidth: 2).opacity(highlighted ? 1 : 0)
+        }
+        .shadow(color: .black.opacity(highlighted ? 0.16 : 0.08),
+                radius: highlighted ? 12 : 8, x: 0, y: highlighted ? 5 : 3)
+        .animation(.easeOut(duration: 0.14), value: highlighted)
     }
 }
 
@@ -213,8 +316,8 @@ struct ManagementEmptyView<Action: View>: View {
     let detail: String
     @ViewBuilder var action: () -> Action
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 28, weight: .light)).foregroundStyle(OrielPalette.mutedText)
+        VStack(spacing: 9) {
+            Image(systemName: icon).font(.system(size: 26, weight: .light)).foregroundStyle(OrielPalette.mutedText)
             Text(title).font(.system(size: 15, weight: .medium))
             Text(detail).font(.system(size: 12)).foregroundStyle(OrielPalette.mutedText).multilineTextAlignment(.center)
             action().padding(.top, 4)

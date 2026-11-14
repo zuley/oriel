@@ -24,11 +24,17 @@ final class ManagementWindow: NSWindowController, NSWindowDelegate {
 
     init(model: AppModel) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 860, height: 620),
-                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                              backing: .buffered, defer: false)
         super.init(window: window)
         self.model = model
         window.title = "Oriel"
         window.backgroundColor = OrielPalette.sidebar
+        // The sidebar and canvas run to the window edge; the sidebar brand replaces the title.
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
+        window.isMovableByWindowBackground = true
         window.contentMinSize = NSSize(width: 720, height: 500)
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .aqua)
