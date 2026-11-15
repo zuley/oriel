@@ -498,4 +498,46 @@ extension NotesWorkspaceTests {
         hosting.layoutSubtreeIfNeeded()
         XCTAssertTrue(session.showingList, "A find bar does not fit; fall back to the list search.")
     }
+
+    /// The header and body share one column, so opening the list must push the
+    /// editor right by the drawer width instead of covering it.
+    func testOpeningTheListShiftsTheBodyRightByTheDrawerWidth() async throws {
+        let (session, _, hosting) = try hostedSession(height: 320)
+        hosting.layoutSubtreeIfNeeded()
+        let editor = try XCTUnwrap(session.document.editorView)
+        let before = editor.convert(editor.bounds, to: hosting).minX
+
+        session.showingList = true
+        hosting.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(400))
+        hosting.layoutSubtreeIfNeeded()
+
+        let shifted = editor.convert(editor.bounds, to: hosting).minX - before
+        XCTAssertGreaterThan(shifted, 60, "正文必须随侧栏右移")
+        XCTAssertLessThan(shifted, 130, "右移量应接近 96 pt 侧栏，而不是整窗")
+    }
+}
+
+/// The list is a drawer on wide notes: about 30% of the window, with a readable
+/// floor on the default 280 pt note and never more than half the window.
+final class NotesSidebarLayoutTests: XCTestCase {
+    func testDrawerTakesAboutThirtyPercentOfWideWindows() {
+        XCTAssertEqual(NotesSidebar.width(for: 360), 108, accuracy: 0.01)
+        XCTAssertEqual(NotesSidebar.width(for: 600), 180, accuracy: 0.01)
+    }
+
+    func testDrawerKeepsAReadableFloorOnSmallNotes() {
+        XCTAssertEqual(NotesSidebar.width(for: 280), 96, accuracy: 0.01)
+    }
+
+    func testDrawerIsCappedForVeryWideWindows() {
+        XCTAssertEqual(NotesSidebar.width(for: 800), 240, accuracy: 0.01)
+    }
+
+    func testDrawerNeverTakesMoreThanHalfTheWindow() {
+        for width in stride(from: 120.0, through: 1200.0, by: 10) {
+            let panel = NotesSidebar.width(for: width)
+            XCTAssertLessThanOrEqual(panel, width * 0.5 + 0.001, "\(width)")
+        }
+    }
 }

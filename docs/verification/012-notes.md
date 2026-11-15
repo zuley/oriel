@@ -3,6 +3,8 @@
 > 2026-11-07 后续变更：用户要求移除沉浸模式，相关入口及逻辑已删除。下文的沉浸验收仅为历史记录；当前常规布局由 `WindowChromeLayoutTests` 覆盖。
 >
 > 2026-11-14 后续变更：便签界面按用户要求整体重构并去线，现行视觉以 [DESIGN.md](../../DESIGN.md)「便签」节为准；下文布局与截图描述保留为历史记录。
+>
+> 2026-11-15 后续变更：列表由整页切换改为左侧滑出抽屉（约窗口 30%，上限 240 pt），抽屉整页全高，标题栏与正文一起右移；窄窗与紧凑高度仍用整页列表/浮层。抽屉宽度与正文右移由 `NotesSidebarLayoutTests` 和 `testOpeningTheListShiftsTheBodyRightByTheDrawerWidth` 覆盖。
 
 日期：2026-11-07。环境：macOS 26.6.2（25G83）、Apple Silicon、Xcode 27.2（27B52）。范围为 [Spec 012](../specs/012-notes.md) 和 [任务计划](../plans/012-notes-tasks.md)。
 

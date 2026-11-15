@@ -279,6 +279,7 @@ enum L10n {
         "未保存": "Unsaved",
         "操作未完成": "Action Incomplete",
         "列表与搜索": "List and Search",
+        "关闭列表": "Close List",
         "返回正文": "Back to Text",
         "导出 TXT": "Export TXT",
         "复制全文": "Copy All",

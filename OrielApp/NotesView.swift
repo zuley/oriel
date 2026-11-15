@@ -1,12 +1,21 @@
 import AppKit
 import SwiftUI
 
+/// Width of the notes drawer. Aim for 30% of the window, keep a readable floor on
+/// the default 280 pt note, and never take more than half the window.
+enum NotesSidebar {
+    static func width(for windowWidth: CGFloat) -> CGFloat {
+        min(max(windowWidth * 0.3, 96), min(240, windowWidth * 0.5))
+    }
+}
+
 struct NotesView: View {
     @ObservedObject private var l10n = Localization.shared
     @ObservedObject var session: NotesSession
     @ObservedObject var workspace: NotesWorkspace
     var open: (NoteDocument) -> Void
     var export: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let accent = OrielPalette.tint
 
     var body: some View {
@@ -14,17 +23,13 @@ struct NotesView: View {
             Group {
                 if geometry.size.height < 68 {
                     pocket
-                } else {
+                } else if geometry.size.width < 170 {
                     VStack(spacing: 0) {
                         toolbar(width: geometry.size.width)
-                        if session.showingList {
-                            list
-                        } else if session.document.record.deleted != nil {
-                            trashState
-                        } else {
-                            NotesEditor(document: session.document).id(session.document.id)
-                        }
+                        legacyContent
                     }
+                } else {
+                    drawerLayout(width: geometry.size.width)
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -33,6 +38,53 @@ struct NotesView: View {
         .foregroundStyle(OrielPalette.text)
         .tint(accent)
         .buttonStyle(.plain)
+    }
+
+    // MARK: Layout
+
+    /// Very narrow windows keep the old full-page list: there is no room for a
+    /// drawer and the toolbar is a menu instead of a list icon.
+    @ViewBuilder private var legacyContent: some View {
+        if session.showingList {
+            list
+        } else {
+            bodyContent
+        }
+    }
+
+    /// The drawer runs the full height of the note page. The toolbar and body sit
+    /// in one column, so the header shifts right with the text instead of staying
+    /// under a full-width bar; the body gives up the drawer's width rather than
+    /// being pushed off-screen.
+    private func drawerLayout(width: CGFloat) -> some View {
+        let panel = NotesSidebar.width(for: width)
+        return HStack(spacing: 0) {
+            if session.showingList {
+                sidebar(panelWidth: panel)
+                    .frame(width: panel)
+                    .transition(.move(edge: .leading))
+            }
+            VStack(spacing: 0) {
+                // Read the column's real width, so the toolbar only collapses to a
+                // menu once the drawer has actually taken the space instead of the
+                // instant `showingList` flips.
+                GeometryReader { proxy in
+                    toolbar(width: proxy.size.width)
+                }
+                .frame(height: 26)
+                bodyContent
+            }
+        }
+        .clipped()
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: session.showingList)
+    }
+
+    @ViewBuilder private var bodyContent: some View {
+        if session.document.record.deleted != nil {
+            trashState
+        } else {
+            NotesEditor(document: session.document).id(session.document.id)
+        }
     }
 
     // MARK: Toolbar
@@ -53,20 +105,14 @@ struct NotesView: View {
                 .accessibilityLabel(L("便签菜单"))
                 Spacer(minLength: 0)
             } else {
-                icon(session.showingList ? "chevron.left" : "list.bullet",
-                     session.showingList ? L("返回便签") : L("便签列表")) {
+                icon(session.showingList ? "sidebar.left" : "list.bullet",
+                     session.showingList ? L("关闭便签列表") : L("便签列表")) {
                     if session.showingList { session.showingList = false }
                     else { session.showList() }
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text(session.showingList ? (session.showingTrash ? L("回收站") : L("便签")) : session.document.title)
-                        .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                    if session.showingList {
-                        Text(L10n.plural(workspace.list(query: session.query, trash: session.showingTrash).count, "%@ 张"))
-                            .font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(session.document.title)
+                    .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 icon("plus", L("新建便签")) { open(workspace.create()) }
                 Menu { menuItems } label: {
                     Image(systemName: "ellipsis").font(.system(size: 12, weight: .medium))
@@ -127,20 +173,53 @@ struct NotesView: View {
     // MARK: List
 
     private var list: some View {
-        let documents = workspace.list(query: session.query, trash: session.showingTrash)
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             searchPill
                 .padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 5)
-            ScrollView {
-                LazyVStack(spacing: 1) {
-                    if workspace.loadError != nil { recoveryRow }
-                    ForEach(documents) { document in
-                        noteRow(document)
-                    }
-                    if documents.isEmpty { emptyList }
-                }
-                .padding(.horizontal, 3).padding(.bottom, 4)
+            rows(compact: false)
+        }
+    }
+
+    /// The drawer: a header with a close button, the count, the search pill and the
+    /// same rows. The count has its own line so it stays visible at every drawer
+    /// width; narrow drawers also drop the preview line in each row.
+    private func sidebar(panelWidth: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 5) {
+                Text(session.showingTrash ? L("回收站") : L("便签"))
+                    .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    .layoutPriority(1)
+                Spacer(minLength: 0)
+                icon("xmark", L("关闭便签列表")) { session.showingList = false }
             }
+            .padding(.leading, 8).padding(.trailing, 2)
+            .frame(height: 26)
+            Text(L10n.plural(workspace.list(query: session.query, trash: session.showingTrash).count, "%@ 张"))
+                .font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8).padding(.bottom, 4)
+            searchPill
+                .padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 5)
+            rows(compact: panelWidth < 150)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Color(nsColor: OrielPalette.sidebar))
+        // A very light lift separates the drawer from the note without a rule.
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 1, y: 0)
+    }
+
+    private func rows(compact: Bool) -> some View {
+        let documents = workspace.list(query: session.query, trash: session.showingTrash)
+        return ScrollView {
+            LazyVStack(spacing: 1) {
+                if workspace.loadError != nil { recoveryRow }
+                ForEach(documents) { document in
+                    noteRow(document, compact: compact)
+                }
+                if documents.isEmpty { emptyList }
+            }
+            .padding(.horizontal, 3).padding(.bottom, 4)
         }
     }
 
@@ -180,29 +259,33 @@ struct NotesView: View {
         .padding(.horizontal, 3).padding(.bottom, 3)
     }
 
-    private func noteRow(_ document: NoteDocument) -> some View {
+    private func noteRow(_ document: NoteDocument, compact: Bool = false) -> some View {
         Button {
             if session.showingTrash { restore(document) } else { open(document) }
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: compact ? 5 : 7) {
                 if document.record.pinned {
                     Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(accent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(document.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    Text(preview(document)).font(.system(size: 10))
-                        .foregroundStyle(OrielPalette.mutedText).lineLimit(1)
+                    if !compact {
+                        Text(preview(document)).font(.system(size: 10))
+                            .foregroundStyle(OrielPalette.mutedText).lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let error = document.errorMessage {
                     Image(systemName: "exclamationmark.circle.fill").font(.system(size: 10))
                         .foregroundStyle(Color(nsColor: OrielPalette.amber)).help(error)
                 }
-                Image(systemName: session.showingTrash ? "arrow.uturn.backward" : "chevron.right")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(OrielPalette.mutedText.opacity(0.6))
+                if !compact {
+                    Image(systemName: session.showingTrash ? "arrow.uturn.backward" : "chevron.right")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(OrielPalette.mutedText.opacity(0.6))
+                }
             }
-            .padding(.horizontal, 8).padding(.vertical, 6)
+            .padding(.horizontal, compact ? 6 : 8).padding(.vertical, 6)
             .notesRow()
         }
         .accessibilityLabel(session.showingTrash ? L("恢复：") + document.title : document.title)
@@ -255,8 +338,11 @@ struct NotesView: View {
             Divider()
         }
         Button(L("新建便签")) { open(workspace.create()) }
-        Button(L("列表与搜索")) { session.showList() }
-        if session.showingList { Button(L("返回正文")) { session.showingList = false } }
+        if session.showingList {
+            Button(L("关闭列表")) { session.showingList = false }
+        } else {
+            Button(L("列表与搜索")) { session.showList() }
+        }
         Divider()
         if session.document.record.deleted == nil {
             Button(session.document.record.pinned ? L("取消置顶") : L("置顶")) {
