@@ -60,7 +60,7 @@ final class NotesWorkspaceTests: XCTestCase {
         note.edit(String(repeating: "中", count: 41) + "\n正文")
         XCTAssertEqual(note.title, String(repeating: "中", count: 40) + "…")
         note.edit(" \t\r\n  ")
-        XCTAssertEqual(note.title, "未命名")
+        XCTAssertEqual(note.title, L("未命名"))
     }
 
     func testTypingAndSavingRestoresExactUnicodeTextInANewWorkspace() throws {

@@ -90,7 +90,7 @@ enum BrowserUserAgent: Equatable {
         case .iPad: return "iPad"
         case .safari: return "Mac Safari"
         case .chrome: return "Mac Chrome"
-        case .custom: return "自定义"
+        case .custom: return L("自定义")
         }
     }
 
@@ -156,10 +156,12 @@ struct BrowserBookmark: Codable, Equatable, Identifiable {
     var url: URL
     var id: String { url.absoluteString }
 
-    static let suggestions: [BrowserBookmark] = [
-        ("必应", "https://www.bing.com"), ("百度", "https://www.baidu.com"),
-        ("GitHub", "https://github.com"), ("维基百科", "https://zh.wikipedia.org"),
-    ].compactMap { title, address in URL(string: address).map { BrowserBookmark(title: title, url: $0) } }
+    /// Computed (not a `static let`) so quick-link names follow a language switch.
+    static var suggestions: [BrowserBookmark] {
+        [(L("必应"), "https://www.bing.com"), (L("百度"), "https://www.baidu.com"),
+         ("GitHub", "https://github.com"), (L("维基百科"), "https://www.wikipedia.org")]
+            .compactMap { title, address in URL(string: address).map { BrowserBookmark(title: title, url: $0) } }
+    }
 }
 
 @MainActor
@@ -203,20 +205,23 @@ final class BrowserBookmarks {
 
 /// Self-contained pages the browser shows itself.
 enum BrowserPages {
-    static let startTitle = "新页签"
+    static var startTitle: String { L("新页签") }
 
     static func start(_ bookmarks: [BrowserBookmark]) -> String {
         let list = bookmarks.isEmpty ? BrowserBookmark.suggestions : bookmarks
         let rows = list.map { item in
             "<a href=\"\(escape(item.url.absoluteString))\"><b>\(escape(String(item.title.prefix(1))))</b><span>\(escape(item.title))</span></a>"
         }.joined()
-        let heading = bookmarks.isEmpty ? "常用网站" : "收藏夹"
+        let heading = bookmarks.isEmpty ? L("常用网站") : L("收藏夹")
         return page(title: startTitle, body: "<h1>\(heading)</h1>\(rows)")
     }
 
     static func failure(url: URL?, message: String) -> String {
-        let retry = url.map { "<a class=\"retry\" href=\"\(escape($0.absoluteString))\"><span>重试</span></a>" } ?? ""
-        return page(title: "无法打开网页", body: "<h1>无法打开网页</h1><p>\(escape(message))</p>\(retry)")
+        let retry = url.map {
+            L(#"<a class="retry" href="%@"><span>重试</span></a>"#, escape($0.absoluteString))
+        } ?? ""
+        return page(title: L("无法打开网页"),
+                    body: L(#"<h1>无法打开网页</h1><p>%@</p>%@"#, escape(message), retry))
     }
 
     static func escape(_ text: String) -> String {

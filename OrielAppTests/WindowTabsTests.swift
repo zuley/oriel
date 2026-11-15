@@ -14,7 +14,7 @@ final class WindowTabsTests: XCTestCase {
         let tabs = WindowTabs()
         XCTAssertEqual(tabs.tabs.map(\.number), [1])
         XCTAssertNil(tabs.selected.page)
-        XCTAssertEqual(tabs.selected.title, "首页")
+        XCTAssertEqual(tabs.selected.title, L("首页"))
         let second = tabs.add()
         XCTAssertEqual(second.number, 2)
         XCTAssertEqual(tabs.selected.number, 1, "Adding does not select.")

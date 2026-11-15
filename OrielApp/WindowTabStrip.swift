@@ -26,23 +26,23 @@ final class WindowTabStrip: NSView {
         closeTab = close
         addTab = add
         super.init(frame: .zero)
-        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "新建页签")?
+        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: L("新建页签"))?
             .withSymbolConfiguration(.init(pointSize: 11, weight: .medium))
         addButton.imagePosition = .imageOnly
         addButton.isBordered = false
         addButton.contentTintColor = ChromePalette.secondary
-        addButton.toolTip = "新建页签"
-        addButton.setAccessibilityLabel("新建页签")
+        addButton.toolTip = L("新建页签")
+        addButton.setAccessibilityLabel(L("新建页签"))
         addButton.target = self
         addButton.action = #selector(addPressed)
         addSubview(addButton)
-        overflow.image = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: "全部页签")?
+        overflow.image = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: L("全部页签"))?
             .withSymbolConfiguration(.init(pointSize: 11, weight: .medium))
         overflow.imagePosition = .imageOnly
         overflow.isBordered = false
         overflow.contentTintColor = ChromePalette.ink
-        overflow.toolTip = "全部页签"
-        overflow.setAccessibilityLabel("全部页签")
+        overflow.toolTip = L("全部页签")
+        overflow.setAccessibilityLabel(L("全部页签"))
         overflow.target = self
         overflow.action = #selector(overflowPressed)
         overflow.isHidden = true
@@ -52,6 +52,15 @@ final class WindowTabStrip: NSView {
     required init?(coder: NSCoder) { nil }
 
     func select(_ number: Int) { selectTab(number) }
+
+    /// `setTabs` rebuilds the chips (and their titles); these two buttons are
+    /// created once, so their tooltips and labels need a language refresh too.
+    func relocalize() {
+        addButton.toolTip = L("新建页签")
+        addButton.setAccessibilityLabel(L("新建页签"))
+        overflow.toolTip = L("全部页签")
+        overflow.setAccessibilityLabel(L("全部页签"))
+    }
 
     func setTabs(_ tabs: [ChromeTab], selected: Int) {
         selectedNumber = selected
@@ -165,8 +174,8 @@ private final class TabChip: NSView {
             .withSymbolConfiguration(.init(pointSize: 9, weight: .medium))
         closeButton.imagePosition = .imageOnly
         closeButton.contentTintColor = selected ? .white : ChromePalette.secondary
-        closeButton.toolTip = "关闭" + tab.title
-        closeButton.setAccessibilityLabel("关闭" + tab.title)
+        closeButton.toolTip = L("关闭") + tab.title
+        closeButton.setAccessibilityLabel(L("关闭") + tab.title)
         closeButton.isHidden = true
         for button in [titleButton, closeButton] {
             button.isBordered = false
@@ -238,8 +247,8 @@ final class TabSwitcherButton: NSButton {
         isBordered = false
         setButtonType(.momentaryChange)
         focusRingType = .exterior
-        setAccessibilityLabel("切换页签")
-        toolTip = "切换页签"
+        setAccessibilityLabel(L("切换页签"))
+        toolTip = L("切换页签")
     }
 
     required init?(coder: NSCoder) { nil }
@@ -247,6 +256,10 @@ final class TabSwitcherButton: NSButton {
     func configure(_ tab: ChromeTab?) {
         title = tab?.title ?? ""
         setAccessibilityValue(title)
+        // `setTabs` calls `configure` on every relocalize, so refresh the
+        // labels that were set once in `init` here too.
+        setAccessibilityLabel(L("切换页签"))
+        toolTip = L("切换页签")
         needsDisplay = true
     }
 

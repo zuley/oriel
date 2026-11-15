@@ -182,9 +182,25 @@ enum TencentMarket {
 
 @MainActor
 final class StockWatchlist: ObservableObject {
+    /// Stored as an enum, not a rendered string: the status line is recomputed
+    /// in the current language whenever the view redraws (Spec 013 M12).
+    enum Status {
+        case delayed, partial, refreshFailed, loadFailed
+
+        var text: String {
+            switch self {
+            case .delayed: L("行情可能延时")
+            case .partial: L("部分行情缺失")
+            case .refreshFailed: L("刷新失败 · 显示上次报价")
+            case .loadFailed: L("行情加载失败，请刷新")
+            }
+        }
+    }
+
     @Published private(set) var symbols: [StockSymbol]
     @Published private(set) var quotes: [String: StockQuote] = [:]
-    @Published private(set) var status = "行情可能延时"
+    @Published private(set) var status: Status = .delayed
+    var statusText: String { status.text }
     @Published private(set) var loading = false
     private let defaults: UserDefaults
     private let fetchQuotes: @Sendable ([StockSymbol]) async throws -> [String: StockQuote]
@@ -247,10 +263,10 @@ final class StockWatchlist: ObservableObject {
                 try Task.checkCancellation()
                 self?.quotes = result
                 self?.lastQuoteUpdate = .now
-                self?.status = result.count < items.count ? "部分行情缺失" : "行情可能延时"
+                self?.status = result.count < items.count ? .partial : .delayed
             } catch {
                 guard !Task.isCancelled else { return }
-                self?.status = self?.quotes.isEmpty == false ? "刷新失败 · 显示上次报价" : "行情加载失败，请刷新"
+                self?.status = self?.quotes.isEmpty == false ? .refreshFailed : .loadFailed
             }
             self?.loading = false
         }

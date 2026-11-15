@@ -21,6 +21,10 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     private var localMotionMonitor: Any?
     private var globalMotionMonitor: Any?
     private var sampledWindowID: UUID?
+    /// `nonisolated(unsafe)` lets `deinit` unregister even though the class is
+    /// main-actor isolated; the token is only touched on the main thread.
+    private nonisolated(unsafe) var languageObserver: NSObjectProtocol?
+    private var usesDefaultName = true
 
     init(number: Int, frame: CGRect, group: WindowGroupController,
          library: NovelLibrary, watchlist: StockWatchlist, preferences: AppPreferences,
@@ -30,7 +34,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
          onNameChange: @escaping () -> Void,
          onClose: @escaping (UUID) -> Void) {
         self.number = number
-        self.name = "小窗"
+        self.name = L("小窗")
         self.group = group
         self.onClose = onClose
         self.onStateChange = onStateChange
@@ -72,6 +76,15 @@ final class MiniWindowSession: ObservableObject, Identifiable {
         needsTransparencyRecovery = max(preferences.backgroundOpacity, preferences.contentOpacity) <= 0.05
         if let panel { group.send(.frame(panel.bodyFrame), to: id) }
         synchronize()
+        languageObserver = NotificationCenter.default.addObserver(
+            forName: .orielLanguageDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.usesDefaultName { self.name = L("小窗") }
+                self.panel?.relocalize(name: self.name)
+            }
+        }
     }
 
     static func validatedName(_ text: String) -> String? {
@@ -82,6 +95,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
     func rename(_ text: String) {
         guard panel != nil, let name = Self.validatedName(text), name != self.name else { return }
         self.name = name
+        usesDefaultName = false
         panel?.setWindowName(name)
         onNameChange()
     }
@@ -94,13 +108,13 @@ final class MiniWindowSession: ObservableObject, Identifiable {
         group.send(.pointer(NSEvent.mouseLocation, editing: true), to: id)
         synchronize()
         let alert = NSAlert()
-        alert.messageText = "重命名小窗"
-        alert.informativeText = "最多 32 个字"
-        let save = alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+        alert.messageText = L("重命名小窗")
+        alert.informativeText = L("最多 32 个字")
+        let save = alert.addButton(withTitle: L("保存"))
+        alert.addButton(withTitle: L("取消")).keyEquivalent = "\u{1b}"
         let field = WindowRenameField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
         field.stringValue = name
-        field.setAccessibilityLabel("窗口名称")
+        field.setAccessibilityLabel(L("窗口名称"))
         field.delegate = field
         field.saveButton = save
         alert.accessoryView = field
@@ -198,7 +212,7 @@ final class MiniWindowSession: ObservableObject, Identifiable {
         if !endingJobs, let message = CloseGuard.message(busy: panel.busyTerminalTitles) {
             // The question is a sheet on this window, so it must be visible and unlocked.
             if snapshot?.isVisible != true || snapshot?.isLocked == true { recover() }
-            panel.confirmEndingJobs(message, button: "结束并关闭") { [weak self] in
+            panel.confirmEndingJobs(message, button: L("结束并关闭")) { [weak self] in
                 self?.close(endingJobs: true)
             }
             return
@@ -207,8 +221,14 @@ final class MiniWindowSession: ObservableObject, Identifiable {
         dispose()
     }
 
+    deinit {
+        if let languageObserver { NotificationCenter.default.removeObserver(languageObserver) }
+    }
+
     /// Used after the application's save/termination gate has passed.
     func dispose() {
+        if let languageObserver { NotificationCenter.default.removeObserver(languageObserver) }
+        languageObserver = nil
         guard panel != nil else { return }
         stopSampling()
         group.send(.close, to: id)

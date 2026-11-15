@@ -8,11 +8,11 @@ enum PageKind: CaseIterable, Hashable {
 
     var title: String {
         switch self {
-        case .terminal: return "终端"
-        case .novel: return "小说"
-        case .stocks: return "自选股"
-        case .notes: return "便签"
-        case .browser: return "浏览器"
+        case .terminal: return L("终端")
+        case .novel: return L("小说")
+        case .stocks: return L("自选股")
+        case .notes: return L("便签")
+        case .browser: return L("浏览器")
         }
     }
 

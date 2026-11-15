@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct StocksView: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var list: StockWatchlist
     var onStockHover: (StockSymbol, Bool) -> Void = { _, _ in }
     @State private var compactSymbolID: String?
@@ -82,11 +83,11 @@ struct StocksView: View {
             HStack(spacing: 6) {
                 HStack(spacing: 5) {
                     Image(systemName: "magnifyingglass").foregroundStyle(OrielPalette.mutedText)
-                    TextField("代码 / 名称 / 拼音", text: $query).textFieldStyle(.plain)
-                        .accessibilityLabel("搜索股票")
+                    TextField(L("代码 / 名称 / 拼音"), text: $query).textFieldStyle(.plain)
+                        .accessibilityLabel(L("搜索股票"))
                     if !query.isEmpty {
                         Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
-                            .accessibilityLabel("清除搜索")
+                            .accessibilityLabel(L("清除搜索"))
                     }
                 }
                 .padding(.horizontal, 7).frame(height: 25).background(Color(nsColor: OrielPalette.field), in: RoundedRectangle(cornerRadius: 5))
@@ -97,8 +98,8 @@ struct StocksView: View {
                         .background(Color(nsColor: OrielPalette.field), in: RoundedRectangle(cornerRadius: 5))
                 }
                 .disabled(term.isEmpty && list.loading)
-                .help(term.isEmpty ? "刷新行情" : "重新搜索")
-                .accessibilityLabel(term.isEmpty ? "刷新行情" : "重新搜索")
+                .help(term.isEmpty ? L("刷新行情") : L("重新搜索"))
+                .accessibilityLabel(term.isEmpty ? L("刷新行情") : L("重新搜索"))
             }
             .padding(.horizontal, 6).padding(.vertical, 4)
             if term.isEmpty {
@@ -108,16 +109,16 @@ struct StocksView: View {
                             HStack(spacing: 2) {
                                 Button { editing.toggle() } label: {
                                     HStack(spacing: 3) {
-                                        Text(editing ? "完成" : "我的自选")
+                                        Text(editing ? L("完成") : L("我的自选"))
                                         Image(systemName: editing ? "checkmark" : "chevron.down").font(.system(size: 8))
                                     }
-                                }.help("管理自选股").frame(maxWidth: .infinity, alignment: .leading)
+                                }.help(L("管理自选股")).frame(maxWidth: .infinity, alignment: .leading)
                                 ForEach(Column.allCases, id: \.self) { col in
                                     Button {
                                         if sort == col { ascending.toggle() } else { sort = col; ascending = false }
                                     } label: {
                                         HStack(spacing: 2) {
-                                            Text(col.rawValue)
+                                            Text(L(col.rawValue))
                                             Image(systemName: sort == col ? (ascending ? "chevron.up" : "chevron.down") : "arrow.up.arrow.down")
                                                 .font(.system(size: 7))
                                         }
@@ -138,13 +139,13 @@ struct StocksView: View {
                                                 }
                                             }
                                     }
-                                    if sorted.isEmpty { Text("搜索股票以加入自选").foregroundStyle(OrielPalette.mutedText).padding(.vertical) }
+                                    if sorted.isEmpty { Text(L("搜索股票以加入自选")).foregroundStyle(OrielPalette.mutedText).padding(.vertical) }
                                 }
                             }
                             HStack {
-                                Text("腾讯财经").fontWeight(.medium)
+                                Text(L("腾讯财经")).fontWeight(.medium)
                                 Spacer()
-                                Text(list.loading ? "更新中…" : list.status)
+                                Text(list.loading ? L("更新中…") : list.statusText)
                             }.font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText).padding(.horizontal, 7).frame(height: 20)
                             Divider()
                             quoteRow(.index, index: true).help(list.quotes[StockSymbol.index.id]?.asOf ?? "上证指数").background(Color.gray.opacity(0.06))
@@ -168,7 +169,7 @@ struct StocksView: View {
                                     Image(systemName: added ? "checkmark.circle.fill" : "plus.circle").foregroundStyle(Color.accentColor)
                                 }.padding(.horizontal, 7).frame(height: 28).contentShape(Rectangle())
                             }
-                            .accessibilityLabel((added ? "移除" : "添加") + symbol.name)
+                            .accessibilityLabel((added ? L("移除") : L("添加")) + symbol.name)
                             .background(StockRowHoverArea { onStockHover(symbol, $0) })
                             .onDisappear { onStockHover(symbol, false) }
                         }
@@ -182,15 +183,15 @@ struct StocksView: View {
             let input = term
             matches = []
             guard !input.isEmpty else { return }
-            searchStatus = "正在搜索…"
+            searchStatus = L("正在搜索…")
             do {
                 try await Task.sleep(for: .milliseconds(250))
                 let result = try await TencentMarket.search(input)
                 try Task.checkCancellation()
                 matches = result
-                searchStatus = "没有匹配的股票"
+                searchStatus = L("没有匹配的股票")
             } catch {
-                if !Task.isCancelled { searchStatus = "搜索失败，点刷新重试" }
+                if !Task.isCancelled { searchStatus = L("搜索失败，点刷新重试") }
             }
         }
     }
@@ -211,7 +212,7 @@ struct StocksView: View {
                 if !index {
                     if editing {
                         Button { list.toggle(symbol) } label: { Image(systemName: "minus.circle.fill").foregroundStyle(up) }
-                            .accessibilityLabel("移除" + symbol.name)
+                            .accessibilityLabel(L("移除") + symbol.name)
                     } else { badge(symbol) }
                 }
                 Text(symbol.name).foregroundStyle(OrielPalette.text).lineLimit(1)

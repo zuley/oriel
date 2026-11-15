@@ -8,7 +8,7 @@ final class LockRecoveryPanel: NSPanel {
         button = MiniWindowChromeView.makeLockRecoveryControl(unlock: unlock)
         super.init(contentRect: NSRect(x: 0, y: 0, width: 28, height: 28),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        title = "取消穿透"
+        title = L("取消穿透")
         animationBehavior = .none
         isReleasedWhenClosed = false
         isFloatingPanel = true

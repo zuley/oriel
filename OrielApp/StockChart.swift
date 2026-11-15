@@ -144,6 +144,7 @@ final class StockChartHover: ObservableObject {
 }
 
 struct StockChartView: View {
+    @ObservedObject private var l10n = Localization.shared
     let symbol: StockSymbol
     @ObservedObject var chart: StockChartHover
 
@@ -152,7 +153,7 @@ struct StockChartView: View {
             HStack(spacing: 2) {
                 ForEach(StockChartPeriod.allCases, id: \.self) { period in
                     Button { chart.load(period) } label: {
-                        Text(period.rawValue).font(.system(size: 10, weight: .medium))
+                        Text(L(period.rawValue)).font(.system(size: 10, weight: .medium))
                             .padding(.horizontal, 7).frame(height: 18)
                             .background(chart.period == period ? Color(nsColor: OrielPalette.selection) : .clear, in: RoundedRectangle(cornerRadius: 4))
                     }
@@ -167,7 +168,7 @@ struct StockChartView: View {
                 case nil:
                     if chart.failed {
                         Button { chart.load(chart.period) } label: { Image(systemName: "arrow.clockwise") }
-                            .buttonStyle(.plain).accessibilityLabel("重试")
+                            .buttonStyle(.plain).accessibilityLabel(L("重试"))
                     } else { ProgressView().controlSize(.small) }
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -203,7 +204,7 @@ struct StockChartView: View {
             }
             context.stroke(line, with: .color(OrielPalette.tint), lineWidth: 1.2)
             if points.count == 1 { context.fill(Path(ellipseIn: CGRect(x: last.x-1, y: last.y-1, width: 2, height: 2)), with: .color(OrielPalette.tint)) }
-        }.accessibilityLabel(symbol.name + "分时走势")
+        }.accessibilityLabel(symbol.name + L("分时走势"))
     }
 
     private func daily(_ candles: [DailyCandle]) -> some View {
@@ -225,7 +226,7 @@ struct StockChartView: View {
                 context.fill(Path(body), with: .color(color))
             }
         }
-        .accessibilityLabel(symbol.name + "日 K 线")
+        .accessibilityLabel(symbol.name + L("日 K 线"))
     }
 
     private func priceChart(low: Double, high: Double, reference: Double?,

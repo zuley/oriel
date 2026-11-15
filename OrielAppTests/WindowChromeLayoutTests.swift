@@ -40,8 +40,8 @@ final class WindowChromeLayoutTests: XCTestCase {
         chrome.showReadingSurface(reading)
         XCTAssertEqual(reading.frame.height, 36)
         let labels = chrome.subviews.compactMap { ($0 as? NSButton)?.accessibilityLabel() }
-        XCTAssertTrue(labels.contains("新建页签"))
-        XCTAssertTrue(labels.contains("窗口设置"))
+        XCTAssertTrue(labels.contains(L("新建页签")))
+        XCTAssertTrue(labels.contains(L("窗口设置")))
         XCTAssertFalse(labels.contains { $0.contains("沉浸") })
     }
 
@@ -65,7 +65,7 @@ final class WindowChromeLayoutTests: XCTestCase {
             windowSettings: { _ in }, toggleLock: {}, hide: {}, close: {}, drag: { _ in }))
         chrome.layoutSubtreeIfNeeded()
         let toolbarAdd = try XCTUnwrap(chrome.subviews.compactMap { $0 as? ChromeButton }
-            .first { $0.accessibilityLabel() == "新建页签" })
+            .first { $0.accessibilityLabel() == L("新建页签") })
         XCTAssertTrue(toolbarAdd.isHidden)
 
         chrome.setTabs([ChromeTab(number: 1, title: "便签", kind: .notes)], selected: 1)
@@ -73,7 +73,7 @@ final class WindowChromeLayoutTests: XCTestCase {
         XCTAssertEqual(chrome.tabMode, .strip)
         let strip = try XCTUnwrap(chrome.subviews.compactMap { $0 as? WindowTabStrip }.first)
         let stripAdd = try XCTUnwrap(strip.subviews.compactMap { $0 as? NSButton }
-            .first { $0.accessibilityLabel() == "新建页签" })
+            .first { $0.accessibilityLabel() == L("新建页签") })
         let chip = try XCTUnwrap(strip.subviews.first { !($0 is NSButton) })
         XCTAssertFalse(stripAdd.isHidden)
         XCTAssertEqual(stripAdd.frame.minX, chip.frame.maxX + 2)
@@ -97,8 +97,8 @@ final class WindowChromeLayoutTests: XCTestCase {
         chrome.layoutSubtreeIfNeeded()
         let strip = try XCTUnwrap(chrome.subviews.compactMap { $0 as? WindowTabStrip }.first)
         let buttons = strip.subviews.compactMap { $0 as? NSButton }
-        let add = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == "新建页签" })
-        let overflow = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == "全部页签" })
+        let add = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == L("新建页签") })
+        let overflow = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == L("全部页签") })
         XCTAssertFalse(overflow.isHidden)
         XCTAssertLessThanOrEqual(add.frame.maxX + 2, overflow.frame.minX)
         XCTAssertGreaterThanOrEqual(add.frame.minX, 0)
@@ -108,26 +108,26 @@ final class WindowChromeLayoutTests: XCTestCase {
         let chrome = makeChrome()
         chrome.layoutSubtreeIfNeeded()
         XCTAssertTrue(chrome.spacesButton.isHidden)
-        XCTAssertEqual(chrome.spacesButton.accessibilityValue() as? String, "当前桌面")
-        XCTAssertEqual(chrome.spacesButton.accessibilityLabel(), "在所有桌面显示")
+        XCTAssertEqual(chrome.spacesButton.accessibilityValue() as? String, L("当前桌面"))
+        XCTAssertEqual(chrome.spacesButton.accessibilityLabel(), L("在所有桌面显示"))
         chrome.setAppearsOnAllSpaces(true)
         chrome.layoutSubtreeIfNeeded()
         XCTAssertFalse(chrome.spacesButton.isHidden)
-        XCTAssertEqual(chrome.spacesButton.accessibilityValue() as? String, "所有桌面")
-        XCTAssertEqual(chrome.spacesButton.accessibilityLabel(), "仅在当前桌面显示")
+        XCTAssertEqual(chrome.spacesButton.accessibilityValue() as? String, L("所有桌面"))
+        XCTAssertEqual(chrome.spacesButton.accessibilityLabel(), L("仅在当前桌面显示"))
         let labels = chrome.subviews.compactMap { ($0 as? NSButton)?.accessibilityLabel() }
-        XCTAssertTrue(labels.contains("窗口设置"))
-        XCTAssertTrue(labels.contains("新建页签"))
+        XCTAssertTrue(labels.contains(L("窗口设置")))
+        XCTAssertTrue(labels.contains(L("新建页签")))
     }
 
     func testEdgeRevealButtonReportsItsOwnState() {
         let chrome = makeChrome()
         chrome.update(isLocked: false, automaticHiding: true)
-        XCTAssertEqual(chrome.edgeRevealButton.accessibilityValue() as? String, "边缘唤醒已开启")
-        XCTAssertEqual(chrome.edgeRevealButton.accessibilityLabel(), "关闭边缘唤醒")
+        XCTAssertEqual(chrome.edgeRevealButton.accessibilityValue() as? String, L("边缘唤醒已开启"))
+        XCTAssertEqual(chrome.edgeRevealButton.accessibilityLabel(), L("关闭边缘唤醒"))
         chrome.update(isLocked: false, automaticHiding: false)
-        XCTAssertEqual(chrome.edgeRevealButton.accessibilityValue() as? String, "边缘唤醒已关闭")
-        XCTAssertEqual(chrome.edgeRevealButton.accessibilityLabel(), "开启边缘唤醒")
+        XCTAssertEqual(chrome.edgeRevealButton.accessibilityValue() as? String, L("边缘唤醒已关闭"))
+        XCTAssertEqual(chrome.edgeRevealButton.accessibilityLabel(), L("开启边缘唤醒"))
     }
 
     func testSettingsIconReportsHoverWithoutWaitingForClick() {
@@ -154,7 +154,7 @@ final class WindowChromeLayoutTests: XCTestCase {
             chrome.setTabs(tabs, selected: number)
             chrome.layoutSubtreeIfNeeded()
             XCTAssertEqual(chrome.tabMode, .switcher)
-            let item = try XCTUnwrap(chrome.makeTabMenu().items.first { $0.title == "关闭当前页签" })
+            let item = try XCTUnwrap(chrome.makeTabMenu().items.first { $0.title == L("关闭当前页签") })
             XCTAssertTrue(item.isEnabled)
             let action = try XCTUnwrap(item.action)
             XCTAssertTrue(NSApplication.shared.sendAction(action, to: item.target, from: item))
@@ -170,7 +170,7 @@ final class WindowChromeLayoutTests: XCTestCase {
             drag: { _ in }))
         chrome.setTabs([ChromeTab(number: 7, title: "首页", kind: nil),
                         ChromeTab(number: 19, title: "首页", kind: nil)], selected: 19)
-        let item = try XCTUnwrap(chrome.makeTabMenu().items.first { $0.title == "关闭当前页签" })
+        let item = try XCTUnwrap(chrome.makeTabMenu().items.first { $0.title == L("关闭当前页签") })
         let action = try XCTUnwrap(item.action)
         chrome.update(isLocked: true, automaticHiding: false)
         XCTAssertFalse(try XCTUnwrap(chrome.makeTabMenu().items.first { $0.title == item.title }).isEnabled)
@@ -276,13 +276,13 @@ final class WindowChromeLayoutTests: XCTestCase {
         XCTAssertTrue(chrome.windowButton.isHidden)
         XCTAssertTrue(chrome.spacesButton.isHidden)
         let overflow = try XCTUnwrap(chrome.subviews.compactMap { $0 as? ChromeButton }
-            .first { $0.accessibilityLabel() == "更多窗口操作" })
+            .first { $0.accessibilityLabel() == L("更多窗口操作") })
         let collapsedOverflowFrame = overflow.frame
         overflow.onHover?(true)
         chrome.layoutSubtreeIfNeeded()
         XCTAssertTrue(overflow.isHidden)
         let lock = try XCTUnwrap(chrome.subviews.compactMap { $0 as? ChromeButton }
-            .first { $0.accessibilityLabel() == "锁定穿透" })
+            .first { $0.accessibilityLabel() == L("锁定穿透") })
         XCTAssertEqual(lock.frame, collapsedOverflowFrame)
         XCTAssertFalse(chrome.foldButton.isHidden)
         XCTAssertFalse(chrome.windowButton.isHidden)
@@ -290,7 +290,7 @@ final class WindowChromeLayoutTests: XCTestCase {
         XCTAssertEqual(toggles, 1)
         chrome.update(isLocked: false, automaticHiding: false, automaticFolding: true)
         chrome.layoutSubtreeIfNeeded()
-        XCTAssertEqual(chrome.foldButton.accessibilityLabel(), "保持展开")
+        XCTAssertEqual(chrome.foldButton.accessibilityLabel(), L("保持展开"))
         overflow.performClick(nil)
         chrome.layoutSubtreeIfNeeded()
         XCTAssertFalse(overflow.isHidden)
@@ -303,7 +303,7 @@ final class WindowChromeLayoutTests: XCTestCase {
         chrome.update(isLocked: false, automaticHiding: false, automaticFolding: true)
         chrome.layoutSubtreeIfNeeded()
         XCTAssertFalse(overflow.isHidden)
-        XCTAssertEqual(overflow.accessibilityLabel(), "更多窗口操作")
+        XCTAssertEqual(overflow.accessibilityLabel(), L("更多窗口操作"))
     }
 
     func testCollapsingControlsStayVisibleUntilAnimationEndsAndCanReopen() throws {
@@ -317,9 +317,9 @@ final class WindowChromeLayoutTests: XCTestCase {
         defer { panel.close() }
         chrome.layoutSubtreeIfNeeded()
         let overflow = try XCTUnwrap(chrome.subviews.compactMap { $0 as? ChromeButton }
-            .first { $0.accessibilityLabel() == "更多窗口操作" })
+            .first { $0.accessibilityLabel() == L("更多窗口操作") })
         let title = try XCTUnwrap(chrome.subviews.compactMap { $0 as? NSTextField }
-            .first { $0.accessibilityLabel() == "窗口名称" })
+            .first { $0.accessibilityLabel() == L("窗口名称") })
         let restingTitleWidth = title.frame.width
 
         overflow.performClick(nil)
@@ -360,9 +360,9 @@ final class WindowChromeLayoutTests: XCTestCase {
         defer { panel.close() }
         chrome.layoutSubtreeIfNeeded()
         let title = try XCTUnwrap(chrome.subviews.compactMap { $0 as? NSTextField }
-            .first { $0.accessibilityLabel() == "窗口名称" })
+            .first { $0.accessibilityLabel() == L("窗口名称") })
         let overflow = try XCTUnwrap(chrome.subviews.compactMap { $0 as? ChromeButton }
-            .first { $0.accessibilityLabel() == "更多窗口操作" })
+            .first { $0.accessibilityLabel() == L("更多窗口操作") })
         let restingWidth = title.frame.width
 
         overflow.performClick(nil)
@@ -395,9 +395,9 @@ final class WindowChromeLayoutTests: XCTestCase {
         defer { panel.close() }
         chrome.layoutSubtreeIfNeeded()
         let title = try XCTUnwrap(chrome.subviews.compactMap { $0 as? NSTextField }
-            .first { $0.accessibilityLabel() == "窗口名称" })
+            .first { $0.accessibilityLabel() == L("窗口名称") })
         let overflow = try XCTUnwrap(chrome.subviews.compactMap { $0 as? ChromeButton }
-            .first { $0.accessibilityLabel() == "更多窗口操作" })
+            .first { $0.accessibilityLabel() == L("更多窗口操作") })
         XCTAssertFalse(title.isHidden)
 
         overflow.performClick(nil)
@@ -429,9 +429,9 @@ final class WindowChromeLayoutTests: XCTestCase {
         chrome.layoutSubtreeIfNeeded()
         let switcher = try XCTUnwrap(chrome.subviews.compactMap { $0 as? TabSwitcherButton }.first)
         let add = try XCTUnwrap(chrome.subviews.compactMap { $0 as? ChromeButton }
-            .first { $0.accessibilityLabel() == "新建页签" })
+            .first { $0.accessibilityLabel() == L("新建页签") })
         let overflow = try XCTUnwrap(chrome.subviews.compactMap { $0 as? ChromeButton }
-            .first { $0.accessibilityLabel() == "更多窗口操作" })
+            .first { $0.accessibilityLabel() == L("更多窗口操作") })
         let restingWidth = switcher.frame.width
         let restingAddX = add.frame.minX
 

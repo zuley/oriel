@@ -2,6 +2,7 @@ import Combine
 import SwiftUI
 
 struct ManagementView: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var model: AppModel
     @ObservedObject var state: ManagementState
     @State private var hoveredSection: ManagementState.Section?
@@ -42,7 +43,7 @@ struct ManagementView: View {
 
             Spacer(minLength: 0)
 
-            Text("关闭主界面，小窗仍可用")
+            Text(L("关闭主界面，小窗仍可用"))
                 .font(.system(size: 10))
                 .foregroundStyle(OrielPalette.mutedText)
                 .padding(.horizontal, 14)
@@ -63,7 +64,7 @@ struct ManagementView: View {
                     .font(.system(size: 12, weight: .medium))
                     .frame(width: 16)
                     .foregroundStyle(selected ? accent : OrielPalette.mutedText)
-                Text(section.rawValue)
+                Text(L(section.rawValue))
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? OrielPalette.text : OrielPalette.mutedText)
                 Spacer(minLength: 0)
@@ -111,13 +112,13 @@ struct ManagementView: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(state.section.rawValue).font(.system(size: 22, weight: .semibold))
+                Text(L(state.section.rawValue)).font(.system(size: 22, weight: .semibold))
                 Text(subtitle).font(.system(size: 11)).foregroundStyle(OrielPalette.mutedText)
             }
             Spacer(minLength: 0)
             if state.section == .workspace {
                 Button { model.create() } label: {
-                    Label("新建小窗", systemImage: "plus").font(.system(size: 12, weight: .medium))
+                    Label(L("新建小窗"), systemImage: "plus").font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(OrielPalette.tint)
@@ -128,13 +129,14 @@ struct ManagementView: View {
 
     private var subtitle: String {
         switch state.section {
-        case .workspace: "\(model.windows.count) 个小窗"
-        case .settings: "新小窗默认值与本地数据"
+        case .workspace: L10n.plural(model.windows.count, "%@ 个小窗")
+        case .settings: L("通用、新小窗默认值与本地数据")
         }
     }
 }
 
 private struct WorkspaceManagementView: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var model: AppModel
     let isPresented: Bool
     @ObservedObject private var sampler = ResourceSampler.shared
@@ -143,8 +145,8 @@ private struct WorkspaceManagementView: View {
     var body: some View {
         Group {
             if model.windows.isEmpty {
-                ManagementEmptyView(icon: "rectangle.on.rectangle", title: "还没有小窗",
-                                    detail: "创建小窗后，在小窗中添加和使用内容。") { EmptyView() }
+                ManagementEmptyView(icon: "rectangle.on.rectangle", title: L("还没有小窗"),
+                                    detail: L("创建小窗后，在小窗中添加和使用内容。")) { EmptyView() }
             } else {
                 GeometryReader { viewport in
                     ScrollView([.vertical, .horizontal]) {
@@ -220,6 +222,7 @@ private struct ThumbnailFlowLayout: Layout {
 }
 
 private struct ManagedWindowThumbnail: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var window: MiniWindowSession
     let isPresented: Bool
     let viewportSize: CGSize
@@ -239,19 +242,19 @@ private struct ManagedWindowThumbnail: View {
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
-                .help(snapshot.isVisible ? window.name : "\(window.name) · 已隐藏")
-                .accessibilityLabel(snapshot.isVisible ? window.name : "\(window.name)，已隐藏")
+                .help(snapshot.isVisible ? window.name : L("%@ · 已隐藏", window.name))
+                .accessibilityLabel(snapshot.isVisible ? window.name : L("%@，已隐藏", window.name))
                 .contextMenu {
-                    Button(snapshot.isVisible ? "隐藏" : "显示") {
+                    Button(snapshot.isVisible ? L("隐藏") : L("显示")) {
                         if snapshot.isVisible { window.hide() }
                         else { window.showFromWorkspace() }
                     }
-                    Button("重命名") {
+                    Button(L("重命名")) {
                         nameDraft = window.name
                         renaming = true
                     }
                     Divider()
-                    Button("关闭", role: .destructive) { closing = true }
+                    Button(L("关闭"), role: .destructive) { closing = true }
                 }
                 .onGeometryChange(for: Bool.self) { geometry in
                     geometry.frame(in: .named("thumbnailViewport"))
@@ -264,20 +267,20 @@ private struct ManagedWindowThumbnail: View {
                 .onChange(of: isPresented) { _, visible in
                     if visible && isInViewport { window.refreshThumbnail() }
                 }
-                .alert("关闭\(window.name)？", isPresented: $closing) {
-                    Button("取消", role: .cancel) {}
+                .alert(L("关闭%@？", window.name), isPresented: $closing) {
+                    Button(L("取消"), role: .cancel) {}
                     // This alert is the confirmation, so it also covers running terminal commands.
-                    Button("关闭", role: .destructive) { window.close(endingJobs: true) }
+                    Button(L("关闭"), role: .destructive) { window.close(endingJobs: true) }
                 } message: {
                     Text((CloseGuard.message(busy: window.busyTerminalTitles).map { $0 + "\n\n" } ?? "")
-                         + "将关闭此窗口的所有页签并结束其中的终端会话，其他小窗不受影响。")
+                         + L("将关闭此窗口的所有页签并结束其中的终端会话，其他小窗不受影响。"))
                 }
-                .alert("重命名小窗", isPresented: $renaming) {
-                    TextField("窗口名称", text: $nameDraft).accessibilityLabel("窗口名称")
-                    Button("取消", role: .cancel) {}
-                    Button("保存") { window.rename(nameDraft) }
+                .alert(L("重命名小窗"), isPresented: $renaming) {
+                    TextField(L("窗口名称"), text: $nameDraft).accessibilityLabel(L("窗口名称"))
+                    Button(L("取消"), role: .cancel) {}
+                    Button(L("保存")) { window.rename(nameDraft) }
                         .disabled(MiniWindowSession.validatedName(nameDraft) == nil)
-                } message: { Text("最多 32 个字") }
+                } message: { Text(L("最多 32 个字")) }
                 ResourceCaption(usage: usage)
             }
             .opacity(snapshot.isVisible ? 1 : 0.42)
@@ -288,6 +291,7 @@ private struct ManagedWindowThumbnail: View {
 private let thumbnailHeight: CGFloat = 240
 
 private struct WindowThumbnail: View {
+    @ObservedObject private var l10n = Localization.shared
     let width: CGFloat
     let image: NSImage?
     let highlighted: Bool
@@ -317,6 +321,7 @@ private struct WindowThumbnail: View {
 /// The small resource line under a thumbnail. Numbers use tabular digits so the
 /// rows stay still while they update every two seconds.
 private struct ResourceCaption: View {
+    @ObservedObject private var l10n = Localization.shared
     let usage: WindowResourceUsage
 
     var body: some View {
@@ -333,7 +338,8 @@ private struct ResourceCaption: View {
         .lineLimit(1)
         .help(usage.helpText)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(usage.isEmpty ? "没有单独统计的资源占用" : "内存 \(usage.memoryText)，CPU \(usage.cpuText)")
+        .accessibilityLabel(usage.isEmpty ? L("没有单独统计的资源占用")
+                            : L("内存 %@，CPU %@", usage.memoryText, usage.cpuText))
     }
 
     private func metric(_ symbol: String, _ text: String) -> some View {
@@ -345,6 +351,7 @@ private struct ResourceCaption: View {
 }
 
 struct ManagementEmptyView<Action: View>: View {
+    @ObservedObject private var l10n = Localization.shared
     let icon: String
     let title: String
     let detail: String

@@ -79,14 +79,14 @@ final class MiniWindowChromeView: NSView {
         tabStrip = WindowTabStrip(select: actions.selectTab, close: actions.closeTab, add: actions.addTab)
         dragAction = actions.drag
         closeTabAction = actions.closeTab
-        addTabButton = ChromeButton(symbol: .add, label: "新建页签") { _ in actions.addTab() }
-        lockButton = ChromeButton(symbol: .lock, label: "锁定穿透") { _ in actions.toggleLock() }
-        edgeRevealButton = ChromeButton(symbol: .eye, label: "边缘唤醒") { _ in actions.toggleAutomaticHiding() }
-        spacesButton = ChromeButton(symbol: .spaces, label: "在所有桌面显示") { _ in actions.toggleAllSpaces() }
-        foldButton = ChromeButton(symbol: .fold, label: "收起为横条") { _ in actions.toggleFolding() }
-        windowButton = ChromeButton(symbol: .settings, label: "窗口设置", action: actions.windowSettings)
+        addTabButton = ChromeButton(symbol: .add, label: L("新建页签")) { _ in actions.addTab() }
+        lockButton = ChromeButton(symbol: .lock, label: L("锁定穿透")) { _ in actions.toggleLock() }
+        edgeRevealButton = ChromeButton(symbol: .eye, label: L("边缘唤醒")) { _ in actions.toggleAutomaticHiding() }
+        spacesButton = ChromeButton(symbol: .spaces, label: L("在所有桌面显示")) { _ in actions.toggleAllSpaces() }
+        foldButton = ChromeButton(symbol: .fold, label: L("收起为横条")) { _ in actions.toggleFolding() }
+        windowButton = ChromeButton(symbol: .settings, label: L("窗口设置"), action: actions.windowSettings)
         super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 360))
-        overflowButton = ChromeButton(symbol: .more, label: "更多窗口操作") { [weak self] _ in
+        overflowButton = ChromeButton(symbol: .more, label: L("更多窗口操作")) { [weak self] _ in
             guard let self else { return }
             self.setControlsExpanded(!self.controlsExpanded)
         }
@@ -100,8 +100,8 @@ final class MiniWindowChromeView: NSView {
         layer?.masksToBounds = true
         autoresizingMask = [.width, .height]
 
-        let hide = ChromeButton(symbol: .minus, label: "收起到菜单栏") { _ in actions.hide() }
-        let close = ChromeButton(symbol: .close, label: "关闭小窗") { _ in actions.close() }
+        let hide = ChromeButton(symbol: .minus, label: L("收起到菜单栏")) { _ in actions.hide() }
+        let close = ChromeButton(symbol: .close, label: L("关闭小窗")) { _ in actions.close() }
         toolbarButtons = [close, hide, addTabButton, foldButton, edgeRevealButton,
                           spacesButton, windowButton, lockButton, overflowButton]
         for button in toolbarButtons {
@@ -132,7 +132,7 @@ final class MiniWindowChromeView: NSView {
         windowName.alignment = .center
         windowName.lineBreakMode = .byTruncatingTail
         windowName.maximumNumberOfLines = 1
-        windowName.setAccessibilityLabel("窗口名称")
+        windowName.setAccessibilityLabel(L("窗口名称"))
         windowName.wantsLayer = true
         windowName.onRename = { [weak self] in
             guard let self, !self.isLocked else { return }
@@ -356,7 +356,7 @@ final class MiniWindowChromeView: NSView {
                 cancelControlsClose()
                 controlsExpanded = false
                 overflowButton.layer?.removeAnimation(forKey: "oriel.overflowFade")
-                overflowButton.setActive(false, label: "更多窗口操作")
+                overflowButton.setActive(false, label: L("更多窗口操作"))
             }
             tabStrip.setEnabled(!isLocked)
             tabSwitcher.isEnabled = !isLocked
@@ -367,11 +367,11 @@ final class MiniWindowChromeView: NSView {
         }
         for button in toolbarButtons { button.isEnabled = !isLocked }
         edgeRevealButton.setActive(automaticHiding,
-                                   label: automaticHiding ? "关闭边缘唤醒" : "开启边缘唤醒")
-        edgeRevealButton.setAccessibilityValue(automaticHiding ? "边缘唤醒已开启" : "边缘唤醒已关闭")
-        foldButton.setActive(automaticFolding, label: automaticFolding ? "保持展开" : "收起为横条")
-        windowButton.setHint("透明度设置")
-        lockButton.setActive(isLocked, label: isLocked ? "解除锁定穿透" : "锁定穿透")
+                                   label: automaticHiding ? L("关闭边缘唤醒") : L("开启边缘唤醒"))
+        edgeRevealButton.setAccessibilityValue(automaticHiding ? L("边缘唤醒已开启") : L("边缘唤醒已关闭"))
+        foldButton.setActive(automaticFolding, label: automaticFolding ? L("保持展开") : L("收起为横条"))
+        windowButton.setHint(L("透明度设置"))
+        lockButton.setActive(isLocked, label: isLocked ? L("解除锁定穿透") : L("锁定穿透"))
         if layoutChanged { needsLayout = true }
     }
 
@@ -382,8 +382,26 @@ final class MiniWindowChromeView: NSView {
             appearsOnAllSpaces = enabled
             needsLayout = true
         }
-        spacesButton.setActive(enabled, label: enabled ? "仅在当前桌面显示" : "在所有桌面显示")
-        spacesButton.setAccessibilityValue(enabled ? "所有桌面" : "当前桌面")
+        spacesButton.setActive(enabled, label: enabled ? L("仅在当前桌面显示") : L("在所有桌面显示"))
+        spacesButton.setAccessibilityValue(enabled ? L("所有桌面") : L("当前桌面"))
+    }
+
+    /// Re-apply AppKit labels that were set once at creation. SwiftUI content
+    /// redraws on its own; these NSViews need a nudge after a language switch.
+    func relocalize() {
+        let keys = ["关闭小窗", "收起到菜单栏", "新建页签", "收起为横条", "边缘唤醒",
+                    "在所有桌面显示", "窗口设置", "锁定穿透", "更多窗口操作"]
+        for (button, key) in zip(toolbarButtons, keys) {
+            button.setHint(L(key))
+            button.setAccessibilityLabel(L(key))
+        }
+        windowName.setAccessibilityLabel(L("窗口名称"))
+        update(isLocked: isLocked, automaticHiding: automaticHiding, automaticFolding: automaticFolding)
+        setAppearsOnAllSpaces(appearsOnAllSpaces)
+        overflowButton.setActive(controlsExpanded,
+                                 label: controlsExpanded ? L("收起窗口操作") : L("更多窗口操作"))
+        tabStrip.relocalize()
+        home.relocalize()
     }
 
     func setSettingsPanelOpen(_ open: Bool) {
@@ -501,7 +519,7 @@ final class MiniWindowChromeView: NSView {
         controlsExpanded = expanded
         controlsAnimationGeneration += 1
         let generation = controlsAnimationGeneration
-        overflowButton.setActive(expanded, label: expanded ? "收起窗口操作" : "更多窗口操作")
+        overflowButton.setActive(expanded, label: expanded ? L("收起窗口操作") : L("更多窗口操作"))
         if !expanded, animate {
             animateControlsClosed(title: title, generation: generation)
             return
@@ -608,7 +626,7 @@ final class MiniWindowChromeView: NSView {
     func makeTabMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        let header = NSMenuItem(title: windowName.stringValue.isEmpty ? "小窗" : windowName.stringValue,
+        let header = NSMenuItem(title: windowName.stringValue.isEmpty ? L("小窗") : windowName.stringValue,
                                 action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
@@ -621,7 +639,7 @@ final class MiniWindowChromeView: NSView {
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        let close = NSMenuItem(title: "关闭当前页签", action: #selector(tabMenuClosed(_:)), keyEquivalent: "")
+        let close = NSMenuItem(title: L("关闭当前页签"), action: #selector(tabMenuClosed(_:)), keyEquivalent: "")
         close.target = self
         close.tag = selectedTab
         close.isEnabled = !isLocked && tabs.contains { $0.number == selectedTab }
@@ -641,10 +659,10 @@ final class MiniWindowChromeView: NSView {
     }
 
     static func makeLockRecoveryControl(unlock: @escaping () -> Void) -> ChromeButton {
-        let button = ChromeButton(symbol: .lock, label: "取消穿透") { _ in unlock() }
+        let button = ChromeButton(symbol: .lock, label: L("取消穿透")) { _ in unlock() }
         button.frame = NSRect(x: 0, y: 0, width: 28, height: 28)
-        button.setActive(true, label: "取消穿透")
-        button.toolTip = "取消穿透"
+        button.setActive(true, label: L("取消穿透"))
+        button.toolTip = L("取消穿透")
         return button
     }
 

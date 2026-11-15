@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ManagementSettingsView: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var settings: AppPreferences
     @ObservedObject var model: AppModel
     @State private var targetWindow: UUID?
@@ -10,62 +11,78 @@ struct ManagementSettingsView: View {
     @State private var failed = false
     @State private var resetting = false
     @State private var showCustom = false
-    private let labelWidth: CGFloat = 84
+    private let labelWidth: CGFloat = 100
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
-                Toggle("启动时打开主界面", isOn: $settings.openAtLaunch)
-                    .toggleStyle(.checkbox).tint(OrielPalette.tint)
+                group(L("通用")) {
+                    labeled(L("语言")) {
+                        Picker(L("语言"), selection: Binding(
+                            get: { l10n.language },
+                            set: { l10n.setLanguage($0) }
+                        )) {
+                            ForEach(AppLanguage.allCases) { language in
+                                Text(language.displayName).tag(language)
+                            }
+                        }
+                        .labelsHidden().frame(maxWidth: 200)
+                        .accessibilityLabel(L("语言"))
+                    }
+                    Text(L("切换后立即生效，无需重启。"))
+                        .font(.system(size: 11)).foregroundStyle(OrielPalette.mutedText)
+                    Toggle(L("启动时打开主界面"), isOn: $settings.openAtLaunch)
+                        .toggleStyle(.checkbox).tint(OrielPalette.tint)
+                }
 
-                group("新小窗默认值") {
+                group(L("新小窗默认值")) {
                     presetPicker
                     if let preset = settings.currentPreset {
-                        Text(preset.summary).font(.system(size: 10))
+                        Text(L(preset.summary)).font(.system(size: 10))
                             .foregroundStyle(OrielPalette.mutedText).padding(.leading, 2)
                     } else {
-                        Text("当前为自定义值").font(.system(size: 10))
+                        Text(L("当前为自定义值")).font(.system(size: 10))
                             .foregroundStyle(OrielPalette.mutedText).padding(.leading, 2)
                     }
                     if showCustom { customFields }
                     if !model.windows.isEmpty {
-                        labeled("目标小窗") {
-                            Picker("目标小窗", selection: $targetWindow) {
-                                Text("选择小窗").tag(nil as UUID?)
+                        labeled(L("目标小窗")) {
+                            Picker(L("目标小窗"), selection: $targetWindow) {
+                                Text(L("选择小窗")).tag(nil as UUID?)
                                 ForEach(model.windows) { window in Text(window.name).tag(Optional(window.id)) }
                             }
                             .labelsHidden().frame(maxWidth: 240)
-                            .accessibilityLabel("应用默认设置的目标小窗")
+                            .accessibilityLabel(L("应用默认设置的目标小窗"))
                             Spacer(minLength: 0)
                         }
                     }
                     HStack(spacing: 8) {
-                        Button("应用到所选小窗") {
+                        Button(L("应用到所选小窗")) {
                             NSApp.mainWindow?.makeFirstResponder(nil)
                             guard let targetWindow, let window = model.windows.first(where: { $0.id == targetWindow }) else { return }
                             model.applyDefaults(to: targetWindow)
-                            notice = "已应用到\(window.name)"; failed = false; exportURL = nil
+                            notice = L("已应用到%@", window.name); failed = false; exportURL = nil
                         }.disabled(!model.windows.contains { $0.id == targetWindow })
-                        Button("恢复默认") { resetting = true }
+                        Button(L("恢复默认")) { resetting = true }
                     }
-                    Text("选择预设用于新建小窗；自定义可单独调整尺寸与透明度。")
+                    Text(L("选择预设用于新建小窗；自定义可单独调整尺寸与透明度。"))
                         .font(.system(size: 11)).foregroundStyle(OrielPalette.mutedText)
                 }
 
-                group("本地数据") {
-                    Text("便签、书架、自选股和阅读进度保存在本机。")
+                group(L("本地数据")) {
+                    Text(L("便签、书架、自选股和阅读进度保存在本机。"))
                         .foregroundStyle(OrielPalette.mutedText)
                     HStack(spacing: 8) {
-                        Button("导出数据…", action: chooseExport).disabled(exporting)
-                        Button("打开数据目录") {
+                        Button(L("导出数据…"), action: chooseExport).disabled(exporting)
+                        Button(L("打开数据目录")) {
                             do {
                                 try FileManager.default.createDirectory(at: model.dataDirectory, withIntermediateDirectories: true)
                                 NSWorkspace.shared.open(model.dataDirectory)
                             } catch { failed = true; notice = error.localizedDescription; exportURL = nil }
                         }
-                        if exporting { ProgressView().controlSize(.small); Text("正在导出…").foregroundStyle(OrielPalette.mutedText) }
+                        if exporting { ProgressView().controlSize(.small); Text(L("正在导出…")).foregroundStyle(OrielPalette.mutedText) }
                     }
-                    Text("导出为独立副本，含废纸篓；暂不支持一键恢复。")
+                    Text(L("导出为独立副本，含废纸篓；暂不支持一键恢复。"))
                         .font(.system(size: 11)).foregroundStyle(OrielPalette.mutedText)
                 }
 
@@ -74,7 +91,7 @@ struct ManagementSettingsView: View {
                         Image(systemName: failed ? "exclamationmark.circle" : "checkmark.circle")
                             .foregroundStyle(failed ? Color(nsColor: OrielPalette.amber) : OrielPalette.mutedText)
                         Text(notice).textSelection(.enabled)
-                        if let exportURL { Button("查看") { NSWorkspace.shared.activateFileViewerSelecting([exportURL]) } }
+                        if let exportURL { Button(L("查看")) { NSWorkspace.shared.activateFileViewerSelecting([exportURL]) } }
                         Spacer(minLength: 0)
                     }.font(.system(size: 11))
                 }
@@ -91,13 +108,13 @@ struct ManagementSettingsView: View {
         .onChange(of: model.windows.map(\.id)) { _, ids in
             if let targetWindow, !ids.contains(targetWindow) { self.targetWindow = nil }
         }
-        .alert("恢复默认设置？", isPresented: $resetting) {
-            Button("取消", role: .cancel) {}
-            Button("恢复") {
+        .alert(L("恢复默认设置？"), isPresented: $resetting) {
+            Button(L("取消"), role: .cancel) {}
+            Button(L("恢复")) {
                 settings.reset(); showCustom = false
-                notice = "已恢复默认；现有小窗保持原样"; failed = false; exportURL = nil
+                notice = L("已恢复默认；现有小窗保持原样"); failed = false; exportURL = nil
             }
-        } message: { Text("不影响便签、书架、自选股和现有小窗。") }
+        } message: { Text(L("不影响便签、书架、自选股和现有小窗。")) }
     }
 
     /// A compact segmented row: three shape presets plus a custom cell, each with an
@@ -112,13 +129,13 @@ struct ManagementSettingsView: View {
                     showCustom = false
                 } label: {
                     cell(icon: PresetGlyph(preset: preset, selected: selected),
-                         title: preset.title, selected: selected)
+                         title: L(preset.title), selected: selected)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(preset.title)
-                .accessibilityValue(preset.summary)
+                .accessibilityLabel(L(preset.title))
+                .accessibilityValue(L(preset.summary))
                 .accessibilityAddTraits(selected ? .isSelected : [])
-                .help("\(preset.title) · \(preset.summary)")
+                .help("\(L(preset.title)) · \(L(preset.summary))")
             }
             Button {
                 withAnimation(.easeOut(duration: 0.12)) { showCustom.toggle() }
@@ -127,12 +144,12 @@ struct ManagementSettingsView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(custom ? OrielPalette.tint : OrielPalette.mutedText)
                         .frame(width: 30, height: 28),
-                     title: "自定义", selected: custom)
+                     title: L("自定义"), selected: custom)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("自定义尺寸与透明度")
+            .accessibilityLabel(L("自定义尺寸与透明度"))
             .accessibilityAddTraits(custom ? .isSelected : [])
-            .help("自定义尺寸与透明度")
+            .help(L("自定义尺寸与透明度"))
         }
         .padding(3)
         .background(Color(nsColor: OrielPalette.field), in: RoundedRectangle(cornerRadius: 7))
@@ -154,21 +171,21 @@ struct ManagementSettingsView: View {
     /// The original controls stay available for values outside the presets.
     private var customFields: some View {
         VStack(alignment: .leading, spacing: 11) {
-            labeled("尺寸") {
+            labeled(L("尺寸")) {
                 HStack(spacing: 6) {
-                    TextField("宽", value: $settings.width, format: .number.precision(.fractionLength(0)))
-                        .accessibilityLabel("默认宽度").multilineTextAlignment(.center)
+                    TextField(L("宽"), value: $settings.width, format: .number.precision(.fractionLength(0)))
+                        .accessibilityLabel(L("默认宽度")).multilineTextAlignment(.center)
                         .textFieldStyle(.roundedBorder).frame(width: 62)
                     Text("×").foregroundStyle(OrielPalette.mutedText)
-                    TextField("高", value: $settings.height, format: .number.precision(.fractionLength(0)))
-                        .accessibilityLabel("默认高度").multilineTextAlignment(.center)
+                    TextField(L("高"), value: $settings.height, format: .number.precision(.fractionLength(0)))
+                        .accessibilityLabel(L("默认高度")).multilineTextAlignment(.center)
                         .textFieldStyle(.roundedBorder).frame(width: 62)
                     Text("pt").foregroundStyle(OrielPalette.mutedText)
                     Spacer(minLength: 0)
                 }
             }
-            labeled("背景") { opacitySlider($settings.backgroundOpacity, label: "背景") }
-            labeled("内容") { opacitySlider($settings.contentOpacity, label: "内容") }
+            labeled(L("背景")) { opacitySlider($settings.backgroundOpacity, label: L("背景")) }
+            labeled(L("内容")) { opacitySlider($settings.contentOpacity, label: L("内容")) }
         }
     }
 
@@ -192,7 +209,7 @@ struct ManagementSettingsView: View {
             .controlSize(.small)
             .tint(OrielPalette.tint)
             .frame(maxWidth: 240)
-            .accessibilityLabel("默认\(label)透明度")
+            .accessibilityLabel(L("默认%@透明度", label))
     }
 
     private func chooseExport() {
@@ -201,8 +218,8 @@ struct ManagementSettingsView: View {
         chooser.canChooseDirectories = true
         chooser.canChooseFiles = false
         chooser.canCreateDirectories = true
-        chooser.prompt = "导出到此处"
-        chooser.message = "将创建新的 Oriel 数据副本文件夹"
+        chooser.prompt = L("导出到此处")
+        chooser.message = L("将创建新的 Oriel 数据副本文件夹")
         chooser.beginSheetModal(for: window) { result in
             guard result == .OK, let destination = chooser.url else { return }
             exporting = true; notice = nil; exportURL = nil
@@ -210,7 +227,7 @@ struct ManagementSettingsView: View {
                 defer { exporting = false }
                 do {
                     exportURL = try await model.exportData(to: destination)
-                    failed = false; notice = "数据副本已导出"
+                    failed = false; notice = L("数据副本已导出")
                 } catch { failed = true; notice = error.localizedDescription }
             }
         }
@@ -220,6 +237,7 @@ struct ManagementSettingsView: View {
 /// A window silhouette drawn at the preset's real aspect ratio, so tall, wide and
 /// square read at a glance. All three fit the same 26 pt box.
 private struct PresetGlyph: View {
+    @ObservedObject private var l10n = Localization.shared
     let preset: WindowPreset
     let selected: Bool
     private let side: CGFloat = 26

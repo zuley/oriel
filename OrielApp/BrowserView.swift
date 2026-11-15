@@ -79,10 +79,10 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
             button.setAccessibilityLabel(label)
             return button
         }
-        backButton = button("chevron.left", "后退")
-        forwardButton = button("chevron.right", "前进")
-        reloadButton = button("arrow.clockwise", "刷新")
-        menuButton = button("ellipsis", "更多")
+        backButton = button("chevron.left", L("后退"))
+        forwardButton = button("chevron.right", L("前进"))
+        reloadButton = button("arrow.clockwise", L("刷新"))
+        menuButton = button("ellipsis", L("更多"))
         super.init(frame: frame)
 
         wantsLayer = true
@@ -96,7 +96,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         }
         addSubview(addressPill)
         addressPill.onFocusRequest = { [weak self] in self?.focusAddress() }
-        addressField.placeholderString = "搜索或输入网址"
+        addressField.placeholderString = L("搜索或输入网址")
         addressField.font = .systemFont(ofSize: 12)
         addressField.isBordered = false
         addressField.isBezeled = false
@@ -107,13 +107,13 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         addressField.lineBreakMode = .byTruncatingTail
         addressField.usesSingleLineMode = true
         addressField.alignment = .center
-        addressField.setAccessibilityLabel("地址栏")
+        addressField.setAccessibilityLabel(L("地址栏"))
         addressField.delegate = self
         addressField.target = self
         addressField.action = #selector(submitAddress)
         addressField.onWillFocus = { [weak self] in self?.beginAddressEditing() }
         addressPill.addSubview(addressField)
-        secureIcon.image = Self.symbol("lock.fill", "安全连接", size: 9)
+        secureIcon.image = Self.symbol("lock.fill", L("安全连接"), size: 9)
         secureIcon.contentTintColor = Self.quiet
         secureIcon.imageScaling = .scaleNone
         secureIcon.isHidden = true
@@ -135,9 +135,38 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         addSubview(webView)
         observe()
         refreshState()
+        NotificationCenter.default.addObserver(self, selector: #selector(languageDidChange),
+                                               name: .orielLanguageDidChange, object: nil)
     }
 
     required init?(coder: NSCoder) { nil }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    @objc private func languageDidChange() { relocalize() }
+
+    /// Toolbar buttons and the address field are built once; menus, alerts and
+    /// page content are created on demand and already pick up the language.
+    private func relocalize() {
+        let labels: [(ToolbarButton, String, String)] = [
+            (backButton, "chevron.left", "后退"),
+            (forwardButton, "chevron.right", "前进"),
+            (reloadButton, "arrow.clockwise", "刷新"),
+            (menuButton, "ellipsis", "更多")
+        ]
+        for (button, symbol, key) in labels {
+            button.image = Self.symbol(symbol, L(key))
+            button.toolTip = L(key)
+            button.setAccessibilityLabel(L(key))
+        }
+        addressField.placeholderString = L("搜索或输入网址")
+        addressField.setAccessibilityLabel(L("地址栏"))
+        secureIcon.image = Self.symbol("lock.fill", L("安全连接"), size: 9)
+        // The start page is generated HTML loaded as about:blank; rebuild it so
+        // its heading, quick links and document title follow the new language.
+        if webView.url?.scheme?.lowercased() == "about" { showStartPage() }
+        refreshState()
+    }
 
     private func observe() {
         func watch<Value>(_ keyPath: KeyPath<WKWebView, Value>) -> NSKeyValueObservation {
@@ -236,9 +265,9 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         backButton.isEnabled = webView.canGoBack
         forwardButton.isEnabled = webView.canGoForward
         let loading = webView.isLoading
-        reloadButton.image = Self.symbol(loading ? "xmark" : "arrow.clockwise", loading ? "停止" : "刷新")
-        reloadButton.toolTip = loading ? "停止" : "刷新"
-        reloadButton.setAccessibilityLabel(loading ? "停止" : "刷新")
+        reloadButton.image = Self.symbol(loading ? "xmark" : "arrow.clockwise", loading ? L("停止") : L("刷新"))
+        reloadButton.toolTip = loading ? L("停止") : L("刷新")
+        reloadButton.setAccessibilityLabel(loading ? L("停止") : L("刷新"))
         updateAddress()
         layoutProgress()
         if reportedTitle != pageTitle {
@@ -296,7 +325,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         if bookmarks.contains(url) {
             bookmarks.remove(url)
         } else if !bookmarks.add(title: pageTitle, url: url) {
-            inform("无法收藏", "收藏夹最多 \(BrowserBookmarks.limit) 项，请先取消一些收藏。")
+            inform(L("无法收藏"), L("收藏夹最多 %@ 项，请先取消一些收藏。", "\(BrowserBookmarks.limit)"))
         }
     }
 
@@ -308,7 +337,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = detail
-        alert.addButton(withTitle: "好")
+        alert.addButton(withTitle: L("好"))
         alert.beginSheetModal(for: window)
     }
 
@@ -359,8 +388,8 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         let isWebPage = ["http", "https"].contains(url?.scheme?.lowercased())
 
         let bookmarked = bookmarks.contains(url)
-        add(to: menu, bookmarked ? "取消收藏此页" : "收藏此页", #selector(bookmarkAction), enabled: isWebPage || bookmarked, key: "d")
-        let favorites = NSMenuItem(title: "收藏夹", action: nil, keyEquivalent: "")
+        add(to: menu, bookmarked ? L("取消收藏此页") : L("收藏此页"), #selector(bookmarkAction), enabled: isWebPage || bookmarked, key: "d")
+        let favorites = NSMenuItem(title: L("收藏夹"), action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         submenu.autoenablesItems = false
         for item in bookmarks.items {
@@ -370,7 +399,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
             entry.toolTip = item.url.absoluteString
             submenu.addItem(entry)
         }
-        if bookmarks.items.isEmpty { submenu.addItem(NSMenuItem(title: "暂无收藏", action: nil, keyEquivalent: "")) }
+        if bookmarks.items.isEmpty { submenu.addItem(NSMenuItem(title: L("暂无收藏"), action: nil, keyEquivalent: "")) }
         favorites.submenu = submenu
         menu.addItem(favorites)
         menu.addItem(.separator())
@@ -383,11 +412,11 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
             entry.target = self
             entry.representedObject = UserAgentChoice(preset)
             entry.state = preset == userAgent ? .on : .off
-            entry.toolTip = preset.string ?? "WebKit 默认"
+            entry.toolTip = preset.string ?? L("WebKit 默认")
             agentMenu.addItem(entry)
         }
         agentMenu.addItem(.separator())
-        let custom = NSMenuItem(title: "自定义…", action: #selector(editCustomUserAgent), keyEquivalent: "")
+        let custom = NSMenuItem(title: L("自定义…"), action: #selector(editCustomUserAgent), keyEquivalent: "")
         custom.target = self
         if case .custom(let value) = userAgent {
             custom.state = .on
@@ -397,14 +426,14 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         agentItem.submenu = agentMenu
         menu.addItem(agentItem)
         menu.addItem(.separator())
-        add(to: menu, "放大", #selector(zoomInAction), enabled: true, key: "=")
-        add(to: menu, "缩小", #selector(zoomOutAction), enabled: true, key: "-")
-        add(to: menu, "实际大小（\(Int((webView.pageZoom * 100).rounded()))%）", #selector(resetZoomAction), enabled: true, key: "0")
+        add(to: menu, L("放大"), #selector(zoomInAction), enabled: true, key: "=")
+        add(to: menu, L("缩小"), #selector(zoomOutAction), enabled: true, key: "-")
+        add(to: menu, L("实际大小（%@）", "\(Int((webView.pageZoom * 100).rounded()))%"), #selector(resetZoomAction), enabled: true, key: "0")
         menu.addItem(.separator())
-        add(to: menu, "在默认浏览器中打开", #selector(openExternally), enabled: isWebPage)
-        add(to: menu, "拷贝链接", #selector(copyLink), enabled: isWebPage)
+        add(to: menu, L("在默认浏览器中打开"), #selector(openExternally), enabled: isWebPage)
+        add(to: menu, L("拷贝链接"), #selector(copyLink), enabled: isWebPage)
         menu.addItem(.separator())
-        add(to: menu, "清除浏览数据…", #selector(clearBrowsingData), enabled: true)
+        add(to: menu, L("清除浏览数据…"), #selector(clearBrowsingData), enabled: true)
         menu.popUp(positioning: nil, at: NSPoint(x: menuButton.frame.minX, y: menuButton.frame.maxY + 2), in: self)
     }
 
@@ -447,10 +476,10 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     @objc private func editCustomUserAgent() {
         guard let window else { return }
         let alert = NSAlert()
-        alert.messageText = "自定义 User Agent"
-        alert.informativeText = "单行文本，最多 \(BrowserUserAgent.customLimit) 个字符。保存后当前页面会重新加载。"
-        let save = alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+        alert.messageText = L("自定义 User Agent")
+        alert.informativeText = L("单行文本，最多 %@ 个字符。保存后当前页面会重新加载。", "\(BrowserUserAgent.customLimit)")
+        let save = alert.addButton(withTitle: L("保存"))
+        alert.addButton(withTitle: L("取消")).keyEquivalent = "\u{1b}"
         let field = UserAgentField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
         field.placeholderString = BrowserUserAgent.iPhone.string
         if case .custom(let value) = userAgent { field.stringValue = value }
@@ -479,10 +508,10 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
 
     @objc private func clearBrowsingData() {
         let alert = NSAlert()
-        alert.messageText = "清除浏览数据？"
-        alert.informativeText = "将清除所有小窗中浏览器的登录状态、Cookie 和缓存，收藏夹不受影响。"
-        alert.addButton(withTitle: "清除")
-        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+        alert.messageText = L("清除浏览数据？")
+        alert.informativeText = L("将清除所有小窗中浏览器的登录状态、Cookie 和缓存，收藏夹不受影响。")
+        alert.addButton(withTitle: L("清除"))
+        alert.addButton(withTitle: L("取消")).keyEquivalent = "\u{1b}"
         let clear = {
             WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
                                                     modifiedSince: .distantPast) {}
@@ -547,7 +576,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         guard crashReloads < 2 else {
             let failing = webView.url
             errorURL = failing
-            webView.loadHTMLString(BrowserPages.failure(url: failing, message: "网页反复崩溃，已停止自动重新加载。"), baseURL: failing)
+            webView.loadHTMLString(BrowserPages.failure(url: failing, message: L("网页反复崩溃，已停止自动重新加载。")), baseURL: failing)
             return
         }
         crashReloads += 1
@@ -588,10 +617,10 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
                  initiatedByFrame frame: WKFrameInfo) async -> String? {
         guard let window else { return nil }
         let alert = NSAlert()
-        alert.messageText = frame.request.url?.host ?? "网页"
+        alert.messageText = frame.request.url?.host ?? L("网页")
         alert.informativeText = prompt
-        alert.addButton(withTitle: "好")
-        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+        alert.addButton(withTitle: L("好"))
+        alert.addButton(withTitle: L("取消")).keyEquivalent = "\u{1b}"
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         field.stringValue = defaultText ?? ""
         alert.accessoryView = field
@@ -612,10 +641,10 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     private func present(_ message: String, host: String?, confirming: Bool) async -> Bool {
         guard let window else { return false }
         let alert = NSAlert()
-        alert.messageText = host ?? "网页"
+        alert.messageText = host ?? L("网页")
         alert.informativeText = message
-        alert.addButton(withTitle: "好")
-        if confirming { alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}" }
+        alert.addButton(withTitle: L("好"))
+        if confirming { alert.addButton(withTitle: L("取消")).keyEquivalent = "\u{1b}" }
         return await alert.beginSheetModal(for: window) == .alertFirstButtonReturn
     }
 
@@ -649,7 +678,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         guard let entry = downloads.removeValue(forKey: ObjectIdentifier(download)) else { return }
         try? FileManager.default.removeItem(at: entry.destination)
-        inform("下载失败", "\(entry.destination.lastPathComponent)：\(error.localizedDescription)")
+        inform(L("下载失败"), L("%@：%@", entry.destination.lastPathComponent, error.localizedDescription))
     }
 }
 

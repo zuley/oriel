@@ -19,13 +19,13 @@ struct WindowResourceUsage: Equatable, Sendable {
 
     var helpText: String {
         guard !isEmpty else {
-            return "没有可单独统计的终端或网页进程；主进程的共用开销不计入单窗。"
+            return L("没有可单独统计的终端或网页进程；主进程的共用开销不计入单窗。")
         }
         var parts: [String] = []
-        if terminalBytes > 0 { parts.append("终端 \(ResourceFormat.memory(terminalBytes))") }
-        if webBytes > 0 { parts.append("网页 \(ResourceFormat.memory(webBytes))") }
-        if textBytes > 0 { parts.append("正文约 \(ResourceFormat.memory(textBytes))") }
-        return parts.joined(separator: " · ") + "\n含后台页签；CPU 按单核 100% 计，只统计终端与网页进程。"
+        if terminalBytes > 0 { parts.append(L("终端 %@", ResourceFormat.memory(terminalBytes))) }
+        if webBytes > 0 { parts.append(L("网页 %@", ResourceFormat.memory(webBytes))) }
+        if textBytes > 0 { parts.append(L("正文约 %@", ResourceFormat.memory(textBytes))) }
+        return parts.joined(separator: " · ") + L("\n含后台页签；CPU 按单核 100% 计，只统计终端与网页进程。")
     }
 }
 

@@ -143,10 +143,10 @@ final class NotesWorkspace: ObservableObject {
                 onSaveBlocked?(documentIDs)
                 let alert = NSAlert()
                 alert.window.level = .statusBar
-                alert.messageText = "便签尚未保存"
-                alert.informativeText = "文字仍在小窗中。可以保留窗口后复制或导出，也可以修复磁盘问题后重试。\n\n" + NotesError.message(error)
-                alert.addButton(withTitle: "保留窗口")
-                alert.addButton(withTitle: "重试保存")
+                alert.messageText = L("便签尚未保存")
+                alert.informativeText = L("文字仍在小窗中。可以保留窗口后复制或导出，也可以修复磁盘问题后重试。\n\n") + NotesError.message(error)
+                alert.addButton(withTitle: L("保留窗口"))
+                alert.addButton(withTitle: L("重试保存"))
                 if alert.runModal() != .alertSecondButtonReturn { return false }
             }
         }
@@ -338,7 +338,7 @@ final class NotesSession: ObservableObject {
             guard let self else { return }
             if response == .OK, let url = panel.url {
                 do { try Data(text.utf8).write(to: url, options: .atomic) }
-                catch { document?.errorMessage = "导出失败：" + NotesError.message(error) }
+                catch { document?.errorMessage = L("导出失败：") + NotesError.message(error) }
             }
             self.savePanel = nil
             self.exporting = false

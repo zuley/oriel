@@ -22,7 +22,7 @@ struct NoteRecord: Codable, Equatable, Identifiable {
             guard end != remaining.endIndex else { break }
             remaining = remaining[remaining.index(after: end)...]
         }
-        return "未命名"
+        return L("未命名")
     }
 }
 
@@ -32,9 +32,9 @@ enum NotesError: LocalizedError {
         let error = error as NSError
         if error.domain == NSCocoaErrorDomain {
             switch CocoaError.Code(rawValue: error.code) {
-            case .fileWriteFileExists: return "存储目录被同名文件占用，请检查便签的存储位置。"
-            case .fileWriteNoPermission, .fileReadNoPermission: return "没有访问便签目录的权限，请检查文件权限。"
-            case .fileWriteOutOfSpace: return "磁盘空间不足，请腾出空间后重试。"
+            case .fileWriteFileExists: return L("存储目录被同名文件占用，请检查便签的存储位置。")
+            case .fileWriteNoPermission, .fileReadNoPermission: return L("没有访问便签目录的权限，请检查文件权限。")
+            case .fileWriteOutOfSpace: return L("磁盘空间不足，请腾出空间后重试。")
             default: break
             }
         }
@@ -43,9 +43,9 @@ enum NotesError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .tooLarge: "这张便签已达到 1 MiB 上限，请拆成多张。"
-        case .invalidRecord: "便签文件损坏，原件已保留。"
-        case .unsupportedVersion: "这张便签来自较新版本，文件已保留。"
+        case .tooLarge: L("这张便签已达到 1 MiB 上限，请拆成多张。")
+        case .invalidRecord: L("便签文件损坏，原件已保留。")
+        case .unsupportedVersion: L("这张便签来自较新版本，文件已保留。")
         }
     }
 }
@@ -92,7 +92,7 @@ final class NotesStore {
                 known[record.id] = stamp(url)
             }
             catch NotesError.unsupportedVersion {
-                result.issues.append("一张便签需要较新版本，原件已保留。")
+                result.issues.append(L("一张便签需要较新版本，原件已保留。"))
             } catch {
                 do {
                     let backup = url.appendingPathExtension("backup")
@@ -104,8 +104,8 @@ final class NotesStore {
                     try Data(contentsOf: backup).write(to: url, options: .atomic)
                     result.records.append(record)
                     known[record.id] = stamp(url)
-                    result.issues.append("已恢复一张便签的上一份副本，损坏原件已保留。")
-                } catch { result.issues.append("一张便签无法读取，原件已保留，其余便签仍可使用。") }
+                    result.issues.append(L("已恢复一张便签的上一份副本，损坏原件已保留。"))
+                } catch { result.issues.append(L("一张便签无法读取，原件已保留，其余便签仍可使用。")) }
             }
         }
         return result

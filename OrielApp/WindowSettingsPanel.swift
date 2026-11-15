@@ -14,7 +14,7 @@ final class WindowSettingsPanel: NSPanel {
     init() {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 224, height: 72),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        title = "透明度设置"
+        title = L("透明度设置")
         isReleasedWhenClosed = false
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = true
@@ -185,8 +185,8 @@ final class WindowSettingsController: NSViewController {
         }
         view.appearance = NSAppearance(named: .aqua)
         let rows: [(String, NSSlider, CGFloat)] = [
-            ("内容透明度", contentSlider, 44),
-            ("背景透明度", backgroundSlider, 12)
+            (L("内容透明度"), contentSlider, 44),
+            (L("背景透明度"), backgroundSlider, 12)
         ]
         for (title, slider, y) in rows {
             let label = NSTextField(labelWithString: title)
@@ -198,7 +198,7 @@ final class WindowSettingsController: NSViewController {
             slider.target = self
             slider.action = #selector(sliderChanged)
             slider.setAccessibilityLabel(title)
-            slider.setAccessibilityHelp("向左变透明，向右变清晰")
+            slider.setAccessibilityHelp(L("向左变透明，向右变清晰"))
             controls.addSubview(label)
             controls.addSubview(slider)
         }

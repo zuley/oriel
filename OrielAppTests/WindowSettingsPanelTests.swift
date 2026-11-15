@@ -35,7 +35,7 @@ final class WindowSettingsPanelTests: XCTestCase {
         let content = try controls(in: controller.view)
         XCTAssertEqual(content.subviews.compactMap { $0 as? NSSlider }.count, 2)
         XCTAssertEqual(content.subviews.compactMap { $0 as? NSTextField }.map(\.stringValue),
-                       ["内容透明度", "背景透明度"])
+                       [L("内容透明度"), L("背景透明度")])
     }
 
     func testShowingAndReopeningPanelPreserveMaterialAndDismissal() throws {
@@ -77,8 +77,8 @@ final class WindowSettingsPanelTests: XCTestCase {
         }
         let sliders = try controls(in: controller.view).subviews.compactMap { $0 as? NSSlider }
         XCTAssertEqual(sliders.count, 2)
-        let content = try XCTUnwrap(sliders.first { $0.accessibilityLabel() == "内容透明度" })
-        let background = try XCTUnwrap(sliders.first { $0.accessibilityLabel() == "背景透明度" })
+        let content = try XCTUnwrap(sliders.first { $0.accessibilityLabel() == L("内容透明度") })
+        let background = try XCTUnwrap(sliders.first { $0.accessibilityLabel() == L("背景透明度") })
         XCTAssertEqual(content.doubleValue, 0.75)
         XCTAssertEqual(background.doubleValue, 0.25)
         XCTAssertTrue(sliders.allSatisfy { $0.isContinuous && $0.minValue == 0 && $0.maxValue == 1 })

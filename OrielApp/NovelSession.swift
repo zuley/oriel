@@ -143,9 +143,9 @@ final class NovelSession: ObservableObject {
     private var retryRequest: Request?
     var retryTitle: String? {
         switch retryRequest {
-        case .replaceLocal: "重新导入"
+        case .replaceLocal: L("重新导入")
         case nil: nil
-        default: "重试"
+        default: L("重试")
         }
     }
     private var initialized = false
@@ -179,11 +179,11 @@ final class NovelSession: ObservableObject {
         panel.allowedContentTypes = book?.sourceID == nil ? [.plainText, UTType(filenameExtension: "epub")!] : [.plainText]
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = book == nil
-        panel.prompt = "导入"
+        panel.prompt = L("导入")
         if let book {
-            panel.message = book.sourceID == nil ? "选择导入时的原文件以修复本书" : "选择同版书籍的原始 TXT 文件"
+            panel.message = book.sourceID == nil ? L("选择导入时的原文件以修复本书") : L("选择同版书籍的原始 TXT 文件")
         } else {
-            panel.message = "选择 TXT 或 EPUB 小说"
+            panel.message = L("选择 TXT 或 EPUB 小说")
         }
         filePanel = panel
         panel.beginSheetModal(for: window) { [weak self, weak panel] result in
@@ -195,7 +195,7 @@ final class NovelSession: ObservableObject {
 
     func openFiles(_ urls: [URL], replacing book: ShelfBook? = nil) {
         guard let first = urls.first else { return }
-        run(label: "正在导入", retry: book.map(Request.replaceLocal) ?? .files(urls)) { [self] in
+        run(label: L("正在导入"), retry: book.map(Request.replaceLocal) ?? .files(urls)) { [self] in
             if let book {
                 let repaired = try await library.shelf.replace(file: first, of: book)
                 library.invalidateChapters(for: book)
@@ -222,19 +222,21 @@ final class NovelSession: ObservableObject {
             showShelf()
             if let failure = result.failures.first {
                 retryRequest = .files(result.failures.map(\.file))
-                notice = "已入架 \(result.books.count) 本，\(result.failures.count) 份失败。\(failure.file.lastPathComponent) · \(failure.reason)"
+                notice = L("已入架 %@ 本，%@ 份失败。%@ · %@",
+                           "\(result.books.count)", "\(result.failures.count)",
+                           failure.file.lastPathComponent, failure.reason)
             } else {
-                notice = "已加入书架 · \(result.books.count) 本"
+                notice = L("已加入书架 · %@ 本", "\(result.books.count)")
             }
         }
     }
 
     private func importProgress(_ index: Int, total: Int) {
-        if !Task.isCancelled { busy = "正在导入 \(index) / \(total)" }
+        if !Task.isCancelled { busy = L("正在导入 %@ / %@", "\(index)", "\(total)") }
     }
 
     func open(_ saved: ShelfBook) {
-        run(label: "正在打开", retry: .saved(saved)) { [self] in try await present(saved) }
+        run(label: L("正在打开"), retry: .saved(saved)) { [self] in try await present(saved) }
     }
 
     private func present(_ saved: ShelfBook) async throws {
@@ -307,7 +309,7 @@ final class NovelSession: ObservableObject {
     }
 
     func remove(_ saved: ShelfBook) {
-        run(label: "正在移除") { [self] in
+        run(label: L("正在移除")) { [self] in
             try await library.remove(saved)
             if book?.id == saved.id { showShelf() }
         }
@@ -355,7 +357,9 @@ final class NovelSession: ObservableObject {
                     if case ReadingError.damaged = error, case .saved(let book) = retry {
                         self?.retryRequest = .replaceLocal(book)
                     } else { self?.retryRequest = retry }
-                    self?.notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    // ReadingError lives in a language-independent package and returns
+                    // Chinese descriptions; translate those keys at the app boundary.
+                    self?.notice = L((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
                 }
             }
             if !Task.isCancelled { self?.busy = nil; self?.work = nil }

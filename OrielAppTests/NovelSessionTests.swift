@@ -62,7 +62,7 @@ final class NovelSessionTests: XCTestCase {
         let saved = try XCTUnwrap(existing.first)
         reader.open(saved)
         try await waitUntil { reader.busy == nil && reader.notice != nil }
-        XCTAssertEqual(reader.retryTitle, "重新导入")
+        XCTAssertEqual(reader.retryTitle, L("重新导入"))
         reader.retry { target in reader.openFiles([original], replacing: target) }
         try await settle(reader)
         XCTAssertEqual(reader.section, .reading)

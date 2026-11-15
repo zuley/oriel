@@ -17,7 +17,7 @@ final class ResourceUsageTests: XCTestCase {
         let usage = WindowResourceUsage()
         XCTAssertTrue(usage.isEmpty)
         XCTAssertEqual(usage.memoryText, "0 B")
-        XCTAssertTrue(usage.helpText.contains("共用"))
+        XCTAssertFalse(usage.helpText.isEmpty)
     }
 
     func testSamplerAddsAWindowsProcessesAndText() throws {

@@ -80,10 +80,10 @@ extension MiniPanel {
     func confirmEndingJobs(_ message: String, button: String, proceed: @escaping () -> Void) {
         guard !isDisposed, attachedSheet == nil else { return }
         let alert = NSAlert()
-        alert.messageText = "终端中有任务正在运行"
+        alert.messageText = L("终端中有任务正在运行")
         alert.informativeText = message
         alert.addButton(withTitle: button)
-        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+        alert.addButton(withTitle: L("取消")).keyEquivalent = "\u{1b}"
         makeKeyAndOrderFront(nil)
         alert.beginSheetModal(for: self) { response in
             if response == .alertFirstButtonReturn { proceed() }
@@ -94,7 +94,7 @@ extension MiniPanel {
         guard canManageTabs, let tab = windowTabs.tab(number: number) else { return }
         if let terminal = tab.terminal, terminal.isBusy,
            let message = CloseGuard.message(busy: [terminal.title]) {
-            confirmEndingJobs(message, button: "结束并关闭") { [weak self, weak tab] in
+            confirmEndingJobs(message, button: L("结束并关闭")) { [weak self, weak tab] in
                 guard let self, let tab, self.canManageTabs else { return }
                 self.performCloseTab(number: tab.number)
             }

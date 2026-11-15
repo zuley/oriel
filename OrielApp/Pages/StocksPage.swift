@@ -6,7 +6,7 @@ import AppKit
 final class StocksPage: TabPage {
     let kind = PageKind.stocks
     let view: NSView
-    var title: String { "自选股" }
+    var title: String { L("自选股") }
     private weak var host: PageHost?
     private let watchlist: StockWatchlist
     private let chart = StockChartHover()

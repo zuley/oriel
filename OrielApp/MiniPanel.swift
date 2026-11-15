@@ -88,7 +88,7 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
         self.contentOpacity = preferences.contentOpacity
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel, .resizable],
                    backing: .buffered, defer: false)
-        title = "Oriel 迷你窗"
+        title = L("Oriel 迷你窗")
         isReleasedWhenClosed = false
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = true
@@ -173,6 +173,14 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
     func setWindowName(_ name: String) {
         title = "Oriel · \(name)"
         chrome.setWindowName(name)
+    }
+
+    /// Re-apply the labels that AppKit built once: window name, chrome buttons,
+    /// home tiles and tab titles. SwiftUI page content redraws itself.
+    func relocalize(name: String) {
+        setWindowName(name)
+        chrome.relocalize()
+        refreshTabs()
     }
 
     func cancelGeometryInteraction() {

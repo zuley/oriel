@@ -14,7 +14,7 @@ final class WindowTab {
     init(number: Int) { self.number = number }
 
     var current: TabPage? { page.flatMap { pages[$0] } }
-    var title: String { current?.title ?? "首页" }
+    var title: String { current?.title ?? L("首页") }
 
     func dispose() {
         for page in pages.values { page.dispose() }

@@ -69,16 +69,36 @@ final class ChromeHomeView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    private static func welcomeLabel() -> NSTextField {
+    private static func welcomeText() -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         paragraph.lineSpacing = 3
-        let font = NSFont(name: "STSongti-SC-Regular", size: 22)
-            ?? .systemFont(ofSize: 22)
-        let text = NSAttributedString(string: "每有会意，\n便欣然忘食。", attributes: [
+        // The Chinese line is set in a Song serif; use a matching Latin serif
+        // for the translation rather than falling back to a CJK face.
+        let font = L10n.effective == .en
+            ? (NSFont(name: "Georgia", size: 22) ?? .systemFont(ofSize: 22))
+            : (NSFont(name: "STSongti-SC-Regular", size: 22) ?? .systemFont(ofSize: 22))
+        return NSAttributedString(string: L("每有会意，\n便欣然忘食。"), attributes: [
             .font: font, .foregroundColor: ChromePalette.ink, .paragraphStyle: paragraph
         ])
-        return NSTextField(labelWithAttributedString: text)
+    }
+
+    private static func welcomeLabel() -> NSTextField {
+        NSTextField(labelWithAttributedString: welcomeText())
+    }
+
+    /// The welcome line, tile names, tooltips and accessibility labels are built
+    /// once; refresh all of them when the interface language changes. Drawing is
+    /// requested explicitly instead of relying on a side effect of `isEnabled`.
+    func relocalize() {
+        welcome.attributedStringValue = Self.welcomeText()
+        for tile in tiles {
+            let button = tile.button
+            button.title = tile.kind.title
+            button.setAccessibilityLabel(tile.kind.title)
+            button.toolTip = button.isEnabled ? L("打开") + tile.kind.title : nil
+            button.needsDisplay = true
+        }
     }
 
     func setBackgroundOpacity(_ background: CGFloat) {
@@ -90,7 +110,7 @@ final class ChromeHomeView: NSView {
     func setActionsEnabled(_ enabled: Bool) {
         for tile in tiles {
             tile.button.isEnabled = enabled
-            tile.button.toolTip = enabled ? "打开" + tile.kind.title : nil
+            tile.button.toolTip = enabled ? L("打开") + tile.kind.title : nil
         }
     }
 

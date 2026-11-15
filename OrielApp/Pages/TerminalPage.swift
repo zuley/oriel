@@ -10,7 +10,7 @@ final class TerminalPage: TabPage {
     private let terminal: ShellTerminalView
     private weak var host: PageHost?
     var view: NSView { terminal }
-    var title: String { terminal.workingDirectoryName ?? "终端" }
+    var title: String { terminal.workingDirectoryName ?? L("终端") }
     /// A command, not just the idle shell, owns the terminal.
     var isBusy: Bool { terminal.hasForegroundJob }
     var isFinished: Bool { !terminal.isRunning }
@@ -34,7 +34,7 @@ final class TerminalPage: TabPage {
             self.host?.pageFinished(self)
         }
         if !terminal.launchShell() {
-            terminal.feed(text: "无法启动 Shell。返回首页后可重试。")
+            terminal.feed(text: L("无法启动 Shell。返回首页后可重试。"))
         }
     }
 

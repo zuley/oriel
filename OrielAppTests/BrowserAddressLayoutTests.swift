@@ -16,7 +16,7 @@ final class BrowserAddressLayoutTests: XCTestCase {
         panel.contentView = browser
         defer { browser.dispose(); panel.close() }
         let field = try XCTUnwrap(descendants(browser).compactMap { $0 as? NSTextField }
-            .first { $0.accessibilityLabel() == "地址栏" })
+            .first { $0.accessibilityLabel() == L("地址栏") })
         // The app focuses a newly attached browser before AppKit's next layout pass.
         browser.focusAddress()
         browser.layoutSubtreeIfNeeded()

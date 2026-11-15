@@ -11,9 +11,16 @@ final class CloseGuardTests: XCTestCase {
 
     func testMessageNamesTheBusyTabs() throws {
         let one = try XCTUnwrap(CloseGuard.message(busy: ["oriel"]))
-        XCTAssertTrue(one.contains("「oriel」"))
+        XCTAssertTrue(one.contains("oriel"))
         let two = try XCTUnwrap(CloseGuard.message(busy: ["oriel", "~"]))
-        XCTAssertTrue(two.contains("2 个终端页签"))
+        XCTAssertTrue(two.contains("2"))
         XCTAssertTrue(two.contains("oriel") && two.contains("~"))
+    }
+
+    func testQuittingUsesADifferentActionFromClosing() throws {
+        let closing = try XCTUnwrap(CloseGuard.message(busy: ["oriel"]))
+        let quitting = try XCTUnwrap(CloseGuard.message(busy: ["oriel"], intent: .quitting))
+        XCTAssertNotEqual(closing, quitting)
+        XCTAssertTrue(quitting.contains("Oriel"))
     }
 }

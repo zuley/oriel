@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct NotesView: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var session: NotesSession
     @ObservedObject var workspace: NotesWorkspace
     var open: (NoteDocument) -> Void
@@ -40,7 +41,7 @@ struct NotesView: View {
         HStack(spacing: 2) {
             if width < 170 {
                 Menu { menuItems; Divider(); noteChoices } label: {
-                    Label(session.showingList ? (session.showingTrash ? "回收站" : "便签") : session.document.title,
+                    Label(session.showingList ? (session.showingTrash ? L("回收站") : L("便签")) : session.document.title,
                           systemImage: "note.text")
                         .font(.system(size: 11, weight: .medium))
                         .lineLimit(1)
@@ -49,33 +50,33 @@ struct NotesView: View {
                 }
                 .menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true)
                 .background(Color(nsColor: OrielPalette.field), in: RoundedRectangle(cornerRadius: 6))
-                .accessibilityLabel("便签菜单")
+                .accessibilityLabel(L("便签菜单"))
                 Spacer(minLength: 0)
             } else {
                 icon(session.showingList ? "chevron.left" : "list.bullet",
-                     session.showingList ? "返回便签" : "便签列表") {
+                     session.showingList ? L("返回便签") : L("便签列表")) {
                     if session.showingList { session.showingList = false }
                     else { session.showList() }
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text(session.showingList ? (session.showingTrash ? "回收站" : "便签") : session.document.title)
+                    Text(session.showingList ? (session.showingTrash ? L("回收站") : L("便签")) : session.document.title)
                         .font(.system(size: 12, weight: .semibold)).lineLimit(1)
                     if session.showingList {
-                        Text("\(workspace.list(query: session.query, trash: session.showingTrash).count) 张")
+                        Text(L10n.plural(workspace.list(query: session.query, trash: session.showingTrash).count, "%@ 张"))
                             .font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                icon("plus", "新建便签") { open(workspace.create()) }
+                icon("plus", L("新建便签")) { open(workspace.create()) }
                 Menu { menuItems } label: {
                     Image(systemName: "ellipsis").font(.system(size: 12, weight: .medium))
                         .frame(width: 22, height: 22).contentShape(Rectangle())
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                .accessibilityLabel("便签操作")
+                .accessibilityLabel(L("便签操作"))
             }
             if workspace.loadError != nil {
-                icon("exclamationmark.circle", "便签恢复提示", action: showRecovery)
+                icon("exclamationmark.circle", L("便签恢复提示"), action: showRecovery)
                     .foregroundStyle(Color(nsColor: OrielPalette.amber))
             }
             NoteStatus(document: session.document, workspace: workspace).frame(minWidth: 18)
@@ -100,13 +101,13 @@ struct NotesView: View {
                 Image(systemName: session.document.errorMessage == nil ? "note.text" : "exclamationmark.circle")
                     .frame(width: 20, height: 22)
             }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                .accessibilityLabel("便签菜单")
+                .accessibilityLabel(L("便签菜单"))
                 .popover(isPresented: $session.showingList, arrowEdge: .bottom) {
                     VStack(spacing: 0) {
                         HStack {
-                            Text(session.showingTrash ? "回收站" : "便签").font(.system(size: 12, weight: .semibold))
+                            Text(session.showingTrash ? L("回收站") : L("便签")).font(.system(size: 12, weight: .semibold))
                             Spacer()
-                            icon("xmark", "关闭便签列表") { session.showingList = false }
+                            icon("xmark", L("关闭便签列表")) { session.showingList = false }
                         }
                         .padding(.leading, 8).padding(.trailing, 4).padding(.vertical, 3)
                         list
@@ -116,7 +117,7 @@ struct NotesView: View {
                         .onDisappear { session.choosingNote = false }
                 }
             if session.document.record.deleted != nil {
-                Button("恢复") { restore(session.document) }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                Button(L("恢复")) { restore(session.document) }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 NotesEditor(document: session.document, compact: true).id(session.document.id)
             }
@@ -157,7 +158,7 @@ struct NotesView: View {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 10))
                         .foregroundStyle(OrielPalette.mutedText)
                         .frame(width: 20, height: 20).contentShape(Rectangle())
-                }.accessibilityLabel("清除搜索")
+                }.accessibilityLabel(L("清除搜索"))
             }
         }
         .padding(.horizontal, 7)
@@ -169,7 +170,7 @@ struct NotesView: View {
         Button(action: showRecovery) {
             HStack(spacing: 5) {
                 Image(systemName: "exclamationmark.circle.fill").font(.system(size: 10))
-                Text("有恢复提示 · 查看").font(.system(size: 10))
+                Text(L("有恢复提示 · 查看")).font(.system(size: 10))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Color(nsColor: OrielPalette.amber))
@@ -204,14 +205,14 @@ struct NotesView: View {
             .padding(.horizontal, 8).padding(.vertical, 6)
             .notesRow()
         }
-        .accessibilityLabel(session.showingTrash ? "恢复：" + document.title : document.title)
+        .accessibilityLabel(session.showingTrash ? L("恢复：") + document.title : document.title)
         .contextMenu {
-            if session.showingTrash { Button("恢复") { restore(document) } }
+            if session.showingTrash { Button(L("恢复")) { restore(document) } }
             else {
-                Button(document.record.pinned ? "取消置顶" : "置顶") {
+                Button(document.record.pinned ? L("取消置顶") : L("置顶")) {
                     try? workspace.setPinned(!document.record.pinned, for: document)
                 }
-                Button("移到回收站") { try? workspace.trash(document) }
+                Button(L("移到回收站")) { try? workspace.trash(document) }
             }
         }
     }
@@ -219,9 +220,9 @@ struct NotesView: View {
     private var emptyList: some View {
         NotesEmptyState(
             icon: session.showingTrash ? "trash" : (session.query.isEmpty ? "note.text" : "magnifyingglass"),
-            title: session.query.isEmpty ? (session.showingTrash ? "回收站为空" : "还没有便签") : "没有匹配的便签",
-            detail: session.query.isEmpty && !session.showingTrash ? "第一行会作为标题，随手记下就好" : nil,
-            actionTitle: session.query.isEmpty ? (session.showingTrash ? nil : "新建便签") : "清除搜索"
+            title: session.query.isEmpty ? (session.showingTrash ? L("回收站为空") : L("还没有便签")) : L("没有匹配的便签"),
+            detail: session.query.isEmpty && !session.showingTrash ? L("第一行会作为标题，随手记下就好") : nil,
+            actionTitle: session.query.isEmpty ? (session.showingTrash ? nil : L("新建便签")) : L("清除搜索")
         ) {
             if session.query.isEmpty { open(workspace.create()) }
             else { session.query = "" }
@@ -229,63 +230,63 @@ struct NotesView: View {
     }
 
     private var trashState: some View {
-        NotesEmptyState(icon: "trash", title: "已移到回收站", detail: "恢复后可以继续编辑",
-                        actionTitle: "恢复便签") { restore(session.document) }
+        NotesEmptyState(icon: "trash", title: L("已移到回收站"), detail: L("恢复后可以继续编辑"),
+                        actionTitle: L("恢复便签")) { restore(session.document) }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func preview(_ document: NoteDocument) -> String {
         let lines = document.text.split(whereSeparator: \.isNewline)
-        return lines.dropFirst().first.map(String.init) ?? (document.text.isEmpty ? "空白便签" : "")
+        return lines.dropFirst().first.map(String.init) ?? (document.text.isEmpty ? L("空白便签") : "")
     }
 
     // MARK: Menus and actions
 
     @ViewBuilder private var menuItems: some View {
         if let error = session.document.errorMessage {
-            if session.document.isDirty { Button("重试保存") { try? workspace.saveAll() } }
-            Button("查看错误") {
+            if session.document.isDirty { Button(L("重试保存")) { try? workspace.saveAll() } }
+            Button(L("查看错误")) {
                 let alert = NSAlert()
                 alert.window.level = .statusBar
-                alert.messageText = session.document.isDirty ? "未保存" : "操作未完成"
+                alert.messageText = session.document.isDirty ? L("未保存") : L("操作未完成")
                 alert.informativeText = error
                 alert.runModal()
             }
             Divider()
         }
-        Button("新建便签") { open(workspace.create()) }
-        Button("列表与搜索") { session.showList() }
-        if session.showingList { Button("返回正文") { session.showingList = false } }
+        Button(L("新建便签")) { open(workspace.create()) }
+        Button(L("列表与搜索")) { session.showList() }
+        if session.showingList { Button(L("返回正文")) { session.showingList = false } }
         Divider()
         if session.document.record.deleted == nil {
-            Button(session.document.record.pinned ? "取消置顶" : "置顶") {
+            Button(session.document.record.pinned ? L("取消置顶") : L("置顶")) {
                 try? workspace.setPinned(!session.document.record.pinned, for: session.document)
             }.disabled(!session.document.isPersisted && !session.document.isDirty)
-            Button("导出 TXT", action: export)
-            Button("复制全文") { copy() }
-            Button("移到回收站") {
+            Button(L("导出 TXT"), action: export)
+            Button(L("复制全文")) { copy() }
+            Button(L("移到回收站")) {
                 do { try workspace.trash(session.document); session.showingList = true; session.showingTrash = false }
                 catch { /* The document presents its save error. */ }
             }.disabled(!session.document.isPersisted && !session.document.isDirty)
         } else {
-            Button("恢复便签") { restore(session.document) }
-            Button("复制全文") { copy() }
+            Button(L("恢复便签")) { restore(session.document) }
+            Button(L("复制全文")) { copy() }
         }
         Divider()
-        Button(session.showingTrash ? "全部便签" : "回收站") {
+        Button(session.showingTrash ? L("全部便签") : L("回收站")) {
             session.showingList = true; session.showingTrash.toggle(); session.query = ""
         }
         if workspace.loadError != nil {
-            Button("查看恢复提示") { showRecovery() }
+            Button(L("查看恢复提示")) { showRecovery() }
         }
     }
 
     @ViewBuilder private var noteChoices: some View {
-        Menu("切换便签") {
+        Menu(L("切换便签")) {
             ForEach(workspace.list()) { document in
                 Button((document.record.pinned ? "⌃ " : "") + document.title) { open(document) }
             }
-            if workspace.list().isEmpty { Text("暂无便签") }
+            if workspace.list().isEmpty { Text(L("暂无便签")) }
         }
     }
 
@@ -303,10 +304,10 @@ struct NotesView: View {
     private func showRecovery() {
         let alert = NSAlert()
         alert.window.level = .statusBar
-        alert.messageText = "便签恢复提示"
+        alert.messageText = L("便签恢复提示")
         alert.informativeText = workspace.loadError ?? ""
-        alert.addButton(withTitle: "知道了")
-        alert.addButton(withTitle: "打开存储目录")
+        alert.addButton(withTitle: L("知道了"))
+        alert.addButton(withTitle: L("打开存储目录"))
         if alert.runModal() == .alertSecondButtonReturn { workspace.revealStorage() }
         workspace.acknowledgeRecovery()
     }
@@ -314,6 +315,7 @@ struct NotesView: View {
 
 /// A calm empty state: light line icon, short copy and one accent action.
 private struct NotesEmptyState: View {
+    @ObservedObject private var l10n = Localization.shared
     let icon: String
     let title: String
     var detail: String? = nil
@@ -358,6 +360,7 @@ private extension View {
 }
 
 private struct NoteStatus: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var document: NoteDocument
     let workspace: NotesWorkspace
     @State private var details = false
@@ -365,20 +368,20 @@ private struct NoteStatus: View {
         ZStack {
             if let error = document.errorMessage {
                 Button { details = true } label: { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color(nsColor: OrielPalette.amber)).frame(width: 18, height: 22) }
-                    .accessibilityLabel(document.isDirty ? "未保存" : "操作未完成").help(error)
+                    .accessibilityLabel(document.isDirty ? L("未保存") : L("操作未完成")).help(error)
                     .popover(isPresented: $details) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(document.isDirty ? "未保存" : "操作未完成").fontWeight(.medium)
+                            Text(document.isDirty ? L("未保存") : L("操作未完成")).fontWeight(.medium)
                             Text(error).font(.system(size: 11)).fixedSize(horizontal: false, vertical: true)
                             if document.isDirty {
-                                Button("重试保存") { do { try workspace.saveAll(); details = false } catch {} }
+                                Button(L("重试保存")) { do { try workspace.saveAll(); details = false } catch {} }
                             } else {
-                                Button("知道了") { document.errorMessage = nil; details = false }
+                                Button(L("知道了")) { document.errorMessage = nil; details = false }
                             }
                         }.padding(10).frame(width: 210)
                     }
             } else if document.isDirty {
-                Circle().fill(.secondary).frame(width: 4, height: 4).padding(.horizontal, 5).help("尚未保存")
+                Circle().fill(.secondary).frame(width: 4, height: 4).padding(.horizontal, 5).help(L("尚未保存"))
             }
         }
     }
@@ -386,6 +389,9 @@ private struct NoteStatus: View {
 
 /// Uses AppKit's text input and undo system; no string round-trip during marked-text composition.
 struct NotesEditor: NSViewRepresentable {
+    /// Observed so `updateNSView` re-applies the editor's accessibility label
+    /// after a language switch (it is set once in `makeNSView`).
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var document: NoteDocument
     var compact = false
 
@@ -427,7 +433,7 @@ struct NotesEditor: NSViewRepresentable {
         editor.textContainer?.containerSize = NSSize(width: scroll.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         editor.textContainer?.widthTracksTextView = true
         editor.string = document.text
-        editor.setAccessibilityLabel("便签正文")
+        editor.setAccessibilityLabel(L("便签正文"))
         let length = (document.text as NSString).length
         let start = min(document.selection.location, length)
         editor.setSelectedRange(NSRange(location: start, length: min(document.selection.length, length - start)))
@@ -445,6 +451,7 @@ struct NotesEditor: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let editor = scroll.documentView as? NotesTextView else { return }
+        editor.setAccessibilityLabel(L("便签正文"))
         editor.compact = compact
         editor.textContainerInset = NSSize(width: compact ? 3 : 6, height: compact ? 2 : 6)
         // Runs on every keystroke (the document is observed). Typing already put the
@@ -498,7 +505,7 @@ final class NotesTextView: NSTextView {
         super.draw(dirtyRect)
         guard string.isEmpty else { return }
         let point = NSPoint(x: textContainerOrigin.x + (textContainer?.lineFragmentPadding ?? 0), y: textContainerOrigin.y)
-        ("开始记录…" as NSString).draw(at: point, withAttributes: [
+        (L("开始记录…") as NSString).draw(at: point, withAttributes: [
             .font: font ?? NSFont.systemFont(ofSize: 13), .foregroundColor: OrielPalette.secondary
         ])
     }
@@ -549,6 +556,9 @@ final class NotesTextView: NSTextView {
 }
 
 private struct NotesSearch: NSViewRepresentable {
+    /// Observed purely so a language switch calls `updateNSView` again and
+    /// refreshes the placeholder and accessibility label set in `makeNSView`.
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var session: NotesSession
     var submit: () -> Void
     func makeCoordinator() -> Coordinator { Coordinator(session: session, submit: submit) }
@@ -558,8 +568,8 @@ private struct NotesSearch: NSViewRepresentable {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 11)
-        field.placeholderString = "搜索便签"
-        field.setAccessibilityLabel("搜索便签")
+        field.placeholderString = L("搜索便签")
+        field.setAccessibilityLabel(L("搜索便签"))
         field.delegate = context.coordinator
         session.focusSearch = { [weak field] in
             guard let field else { return }
@@ -570,6 +580,11 @@ private struct NotesSearch: NSViewRepresentable {
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.submit = submit
         if field.stringValue != session.query { field.stringValue = session.query }
+        let placeholder = L("搜索便签")
+        if field.placeholderString != placeholder {
+            field.placeholderString = placeholder
+            field.setAccessibilityLabel(placeholder)
+        }
     }
     final class Coordinator: NSObject, NSTextFieldDelegate {
         let session: NotesSession

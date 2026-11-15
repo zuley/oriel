@@ -4,33 +4,34 @@ import SwiftUI
 struct OrielApp: App {
     @NSApplicationDelegateAdaptor(OrielAppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel.shared
+    @ObservedObject private var l10n = Localization.shared
 
     var body: some Scene {
         MenuBarExtra {
-            Button("打开 Oriel") { model.showManagement() }
-            Button("新建小窗") { model.create() }
+            Button(L("打开 Oriel")) { model.showManagement() }
+            Button(L("新建小窗")) { model.create() }
             Divider()
             if !model.windows.isEmpty {
-                Menu("恢复小窗") {
+                Menu(L("恢复小窗")) {
                     ForEach(model.windows) { window in
                         RecoveryMenuItem(window: window)
                     }
                 }
                 Divider()
             }
-            Button("退出 Oriel") { model.quit() }
+            Button(L("退出 Oriel")) { model.quit() }
                 .keyboardShortcut("q")
         } label: {
             Image(nsImage: Self.menuBarIcon)
                 .accessibilityLabel("Oriel")
-                .help("Oriel · 半窗")
+                .help(L("Oriel · 半窗"))
         }
         .menuBarExtraStyle(.menu)
         .commands {
             CommandGroup(replacing: .appSettings) {
-                Button("设置…") { model.showManagement(section: .settings) }.keyboardShortcut(",")
+                Button(L("设置…")) { model.showManagement(section: .settings) }.keyboardShortcut(",")
             }
-            CommandMenu("小窗") {
+            CommandMenu(L("小窗")) {
                 WindowActions(model: model)
             }
         }
@@ -47,10 +48,11 @@ struct OrielApp: App {
 }
 
 private struct WindowActions: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var model: AppModel
 
     var body: some View {
-        Button("新建小窗") { model.create() }
+        Button(L("新建小窗")) { model.create() }
         ForEach(model.windows) { window in
             IndividualWindowMenu(window: window)
         }
@@ -58,6 +60,7 @@ private struct WindowActions: View {
 }
 
 private struct RecoveryMenuItem: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var window: MiniWindowSession
     var body: some View {
         Button(window.name) {
@@ -68,6 +71,7 @@ private struct RecoveryMenuItem: View {
 }
 
 private struct IndividualWindowMenu: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var window: MiniWindowSession
     var body: some View {
         Menu(window.name) { IndividualWindowActions(window: window) }
@@ -75,14 +79,15 @@ private struct IndividualWindowMenu: View {
 }
 
 private struct IndividualWindowActions: View {
+    @ObservedObject private var l10n = Localization.shared
     @ObservedObject var window: MiniWindowSession
     var body: some View {
-        Toggle("锁定穿透", isOn: Binding(get: { window.snapshot?.isLocked ?? false }, set: window.setLocked))
-        Toggle("悬停展开", isOn: Binding(get: { window.snapshot?.automaticFolding ?? false }, set: window.setAutomaticFolding))
-        Toggle("边缘唤醒", isOn: Binding(get: { window.snapshot?.automaticHiding ?? false }, set: window.setAutomaticHiding))
-        Toggle("在所有桌面显示", isOn: Binding(get: { window.appearsOnAllSpaces }, set: window.setAppearsOnAllSpaces))
-        Button("恢复小窗") { window.recover() }
-        Button("关闭小窗") { window.close() }
+        Toggle(L("锁定穿透"), isOn: Binding(get: { window.snapshot?.isLocked ?? false }, set: window.setLocked))
+        Toggle(L("悬停展开"), isOn: Binding(get: { window.snapshot?.automaticFolding ?? false }, set: window.setAutomaticFolding))
+        Toggle(L("边缘唤醒"), isOn: Binding(get: { window.snapshot?.automaticHiding ?? false }, set: window.setAutomaticHiding))
+        Toggle(L("在所有桌面显示"), isOn: Binding(get: { window.appearsOnAllSpaces }, set: window.setAppearsOnAllSpaces))
+        Button(L("恢复小窗")) { window.recover() }
+        Button(L("关闭小窗")) { window.close() }
     }
 }
 
@@ -109,13 +114,13 @@ final class OrielAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // One question for every window's running terminal commands, before saving notes.
         let busy = AppModel.shared.windows.flatMap(\.busyTerminalTitles)
-        if let message = CloseGuard.message(busy: busy) {
+        if let message = CloseGuard.message(busy: busy, intent: .quitting) {
             let alert = NSAlert()
             alert.window.level = .statusBar
-            alert.messageText = "终端中有任务正在运行"
-            alert.informativeText = message.replacingOccurrences(of: "关闭会", with: "退出 Oriel 会")
-            alert.addButton(withTitle: "结束并退出")
-            alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+            alert.messageText = L("终端中有任务正在运行")
+            alert.informativeText = message
+            alert.addButton(withTitle: L("结束并退出"))
+            alert.addButton(withTitle: L("取消")).keyEquivalent = "\u{1b}"
             NSApp.activate()
             if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
         }

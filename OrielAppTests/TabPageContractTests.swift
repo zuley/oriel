@@ -112,7 +112,7 @@ final class TabPageContractTests: XCTestCase {
         page.view.layoutSubtreeIfNeeded()
         try await Task.sleep(for: .milliseconds(20))
         func search(in view: NSView) -> NSTextField? {
-            if let field = view as? NSTextField, field.placeholderString == "搜索便签" { return field }
+            if let field = view as? NSTextField, field.placeholderString == L("搜索便签") { return field }
             return view.subviews.lazy.compactMap { search(in: $0) }.first
         }
         let field = try XCTUnwrap(search(in: page.view))

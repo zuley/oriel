@@ -7,7 +7,7 @@ final class NovelPage: TabPage {
     let view: NSView
     let session: NovelSession
     private weak var host: PageHost?
-    var title: String { session.book?.title ?? "小说" }
+    var title: String { session.book?.title ?? L("小说") }
     /// The open book, so its text is counted once even with two reading tabs.
     var bookID: String? { session.book?.id }
     /// UTF-8 size of the decoded chapters this reader keeps alive (an estimate).

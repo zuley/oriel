@@ -82,11 +82,11 @@ final class BrowserModelTests: XCTestCase {
         let start = BrowserPages.start([hostile])
         XCTAssertFalse(start.contains("<script>"))
         XCTAssertTrue(start.contains("&lt;script&gt;"))
-        XCTAssertTrue(start.contains("收藏夹"))
-        XCTAssertTrue(BrowserPages.start([]).contains("常用网站"))
+        XCTAssertTrue(start.contains(L("收藏夹")))
+        XCTAssertTrue(BrowserPages.start([]).contains(L("常用网站")))
         let failure = BrowserPages.failure(url: hostile.url, message: "<b>offline</b>")
         XCTAssertFalse(failure.contains("<b>offline"))
-        XCTAssertTrue(failure.contains("重试"))
+        XCTAssertTrue(failure.contains(L("重试")))
     }
 
     func testUserAgentChoicePersistsAndMigratesTheOldMobileSwitch() throws {
