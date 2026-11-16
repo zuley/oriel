@@ -292,7 +292,7 @@ enum BrowserPages {
                        width: 46px; height: 46px; border-radius: 12px; overflow: hidden; font-style: normal;
                        box-shadow: 0 1px 2px rgba(54,54,54,.16), inset 0 1px 0 rgba(255,255,255,.18);
                        transition: transform .15s ease, box-shadow .15s ease; }
-        .desktop a i img { display: none; width: 30px; height: 30px; object-fit: contain; }
+        .desktop a i img { display: none; width: 100%; height: 100%; object-fit: contain; }
         .desktop a i.loaded { background: #fff;
                               box-shadow: 0 1px 2px rgba(54,54,54,.18), 0 0 0 .5px rgba(54,54,54,.08); }
         .desktop a i.loaded img { display: block; }
