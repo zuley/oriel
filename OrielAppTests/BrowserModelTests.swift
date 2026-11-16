@@ -102,6 +102,17 @@ final class BrowserModelTests: XCTestCase {
         XCTAssertTrue(page.contains("this.src='https://github.com/favicon.ico'"))
     }
 
+    func testStartPagePutsLongNamesInATooltip() throws {
+        let long = BrowserBookmark(title: "小红书 - 你的生活兴趣社区",
+                                   url: try XCTUnwrap(URL(string: "https://www.xiaohongshu.com/")))
+        let short = BrowserBookmark(title: "GitHub", url: try XCTUnwrap(URL(string: "https://github.com/")))
+        let page = BrowserPages.start([long, short])
+        // The visible name is cut to six characters wide; the whole title rides on the tooltip.
+        XCTAssertTrue(page.contains("title=\"小红书 - 你的生活兴趣社区\""))
+        XCTAssertFalse(page.contains("title=\"GitHub\""))
+        XCTAssertTrue(page.contains("max-width: 6em"))
+    }
+
     func testUserAgentChoicePersistsAndMigratesTheOldMobileSwitch() throws {
         let suite = UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

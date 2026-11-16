@@ -221,8 +221,11 @@ enum BrowserPages {
                     + "onload=\"this.parentNode.classList.add('loaded')\" "
                     + "onerror=\"if(this.dataset.next){this.remove()}else{this.dataset.next='1';this.src='\(escape(fallback))'}\">"
             } ?? ""
-            return "<a href=\"\(escape(item.url.absoluteString))\"><i class=\"tile\">\(icon)\(letter)</i>"
-                + "<span>\(escape(item.title))</span></a>"
+            let name = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            // The name is cut to six characters wide; the rest rides on the tooltip.
+            let full = name.count > 6 ? " title=\"\(escape(name))\"" : ""
+            return "<a href=\"\(escape(item.url.absoluteString))\"\(full)><i class=\"tile\">\(icon)\(letter)</i>"
+                + "<span>\(escape(name))</span></a>"
         }.joined()
         let heading = bookmarks.isEmpty ? L("常用网站") : L("收藏夹")
         return page(title: startTitle,
@@ -286,8 +289,8 @@ enum BrowserPages {
         ::selection { background: var(--oriel-highlight); color: var(--oriel-ink); }
         .desktop { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
                    gap: 14px 4px; align-content: start; }
-        .desktop a { display: flex; flex-direction: column; align-items: center; gap: 6px;
-                     padding: 2px; border-radius: 9px; }
+        .desktop a { display: flex; flex-direction: column; align-items: center;
+                     gap: 6px; padding: 2px; border-radius: 9px; }
         .desktop a i { position: relative; display: flex; align-items: center; justify-content: center;
                        width: 46px; height: 46px; border-radius: 12px; overflow: hidden; font-style: normal;
                        box-shadow: 0 1px 2px rgba(54,54,54,.16), inset 0 1px 0 rgba(255,255,255,.18);
@@ -304,9 +307,9 @@ enum BrowserPages {
                        box-shadow: 0 3px 7px rgba(54,54,54,.22), inset 0 1px 0 rgba(255,255,255,.22); }
         .desktop a:focus-visible { outline: none; }
         .desktop a:focus-visible i { outline: 2px solid var(--oriel-accent); outline-offset: 2px; }
-        .desktop a span { max-width: 100%; font-size: 10.5px; line-height: 1.3; text-align: center;
-                          color: var(--oriel-ink); display: -webkit-box; -webkit-box-orient: vertical;
-                          -webkit-line-clamp: 2; overflow: hidden; word-break: break-word; }
+        .desktop a span { max-width: 6em; font-size: 10.5px; line-height: 1.3; text-align: center;
+                          color: var(--oriel-ink); white-space: nowrap; overflow: hidden;
+                          text-overflow: ellipsis; }
         a.retry { display: flex; align-items: center; justify-content: center; padding: 7px 8px;
                   border-radius: 6px; background: var(--oriel-field); }
         a.retry:hover, a.retry:active { background: var(--oriel-selection); }
