@@ -95,8 +95,11 @@ final class BrowserModelTests: XCTestCase {
         let page = BrowserPages.start([github, wiki])
         XCTAssertTrue(page.contains("class=\"desktop\""))
         XCTAssertEqual(page.components(separatedBy: "<a href=").count - 1, 2)
-        XCTAssertTrue(page.contains(">G</i>"))
-        XCTAssertTrue(page.contains(">维</i>"))
+        XCTAssertTrue(page.contains(">G</span>"))
+        XCTAssertTrue(page.contains(">维</span>"))
+        // The tile loads the site's own icon, then falls back to the drawn letter.
+        XCTAssertTrue(page.contains("src=\"https://github.com/apple-touch-icon.png\""))
+        XCTAssertTrue(page.contains("this.src='https://github.com/favicon.ico'"))
     }
 
     func testUserAgentChoicePersistsAndMigratesTheOldMobileSwitch() throws {

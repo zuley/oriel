@@ -207,20 +207,37 @@ final class BrowserBookmarks {
 enum BrowserPages {
     static var startTitle: String { L("新页签") }
 
-    /// The start page is an icon desktop: one rounded monogram tile above each
-    /// name, so a dozen bookmarks stay scannable in a mini window.
+    /// The start page is an icon desktop: one rounded icon above each name, so a
+    /// dozen bookmarks stay scannable in a mini window.
     static func start(_ bookmarks: [BrowserBookmark]) -> String {
         let list = bookmarks.isEmpty ? BrowserBookmark.suggestions : bookmarks
         let tiles = list.map { item -> String in
             let initial = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
                 .first.map { String($0).uppercased() } ?? "·"
-            return "<a href=\"\(escape(item.url.absoluteString))\">"
-                + "<i style=\"background:\(tint(for: item.url.host ?? item.url.absoluteString))\">\(escape(initial))</i>"
+            let letter = "<span class=\"letter\" style=\"background:\(tint(for: item.url.host ?? item.url.absoluteString))\">"
+                + "\(escape(initial))</span>"
+            let icon = iconURLs(for: item).map { touch, fallback in
+                "<img alt=\"\" src=\"\(escape(touch))\" "
+                    + "onload=\"this.parentNode.classList.add('loaded')\" "
+                    + "onerror=\"if(this.dataset.next){this.remove()}else{this.dataset.next='1';this.src='\(escape(fallback))'}\">"
+            } ?? ""
+            return "<a href=\"\(escape(item.url.absoluteString))\"><i class=\"tile\">\(icon)\(letter)</i>"
                 + "<span>\(escape(item.title))</span></a>"
         }.joined()
         let heading = bookmarks.isEmpty ? L("常用网站") : L("收藏夹")
         return page(title: startTitle,
                     body: "<h1 class=\"label\">\(heading)</h1><div class=\"desktop\">\(tiles)</div>")
+    }
+
+    /// The icons a site publishes for itself, fetched from its own origin so no
+    /// third-party favicon service ever sees the bookmark list. Apple's touch icon
+    /// comes first because it is large enough to stay crisp at 46 pt; favicon.ico is
+    /// the fallback, and the drawn letter stays when both are missing.
+    private static func iconURLs(for item: BrowserBookmark) -> (touch: String, fallback: String)? {
+        guard let host = item.url.host, let scheme = item.url.scheme,
+              ["http", "https"].contains(scheme.lowercased()) else { return nil }
+        let origin = scheme + "://" + host + (item.url.port.map { ":\($0)" } ?? "")
+        return (origin + "/apple-touch-icon.png", origin + "/favicon.ico")
     }
 
     /// A stable tile colour per site, so a bookmark keeps the same icon between launches.
@@ -271,11 +288,18 @@ enum BrowserPages {
                    gap: 14px 4px; align-content: start; }
         .desktop a { display: flex; flex-direction: column; align-items: center; gap: 6px;
                      padding: 2px; border-radius: 9px; }
-        .desktop a i { display: flex; align-items: center; justify-content: center; width: 46px; height: 46px;
-                       border-radius: 12px; font-style: normal; font-size: 19px; font-weight: 600;
-                       color: rgba(255,255,255,.95);
+        .desktop a i { position: relative; display: flex; align-items: center; justify-content: center;
+                       width: 46px; height: 46px; border-radius: 12px; overflow: hidden; font-style: normal;
                        box-shadow: 0 1px 2px rgba(54,54,54,.16), inset 0 1px 0 rgba(255,255,255,.18);
                        transition: transform .15s ease, box-shadow .15s ease; }
+        .desktop a i img { display: none; width: 30px; height: 30px; object-fit: contain; }
+        .desktop a i.loaded { background: #fff;
+                              box-shadow: 0 1px 2px rgba(54,54,54,.18), 0 0 0 .5px rgba(54,54,54,.08); }
+        .desktop a i.loaded img { display: block; }
+        .desktop a i .letter { position: absolute; inset: 0; display: flex; align-items: center;
+                               justify-content: center; font-size: 19px; font-weight: 600;
+                               color: rgba(255,255,255,.95); }
+        .desktop a i.loaded .letter { display: none; }
         .desktop a:hover i, .desktop a:active i { transform: translateY(-1px);
                        box-shadow: 0 3px 7px rgba(54,54,54,.22), inset 0 1px 0 rgba(255,255,255,.22); }
         .desktop a:focus-visible { outline: none; }
