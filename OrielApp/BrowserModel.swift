@@ -207,14 +207,38 @@ final class BrowserBookmarks {
 enum BrowserPages {
     static var startTitle: String { L("新页签") }
 
+    /// The start page is an icon desktop: one rounded monogram tile above each
+    /// name, so a dozen bookmarks stay scannable in a mini window.
     static func start(_ bookmarks: [BrowserBookmark]) -> String {
         let list = bookmarks.isEmpty ? BrowserBookmark.suggestions : bookmarks
-        let rows = list.map { item in
-            "<a href=\"\(escape(item.url.absoluteString))\"><b>\(escape(String(item.title.prefix(1))))</b><span>\(escape(item.title))</span></a>"
+        let tiles = list.map { item -> String in
+            let initial = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                .first.map { String($0).uppercased() } ?? "·"
+            return "<a href=\"\(escape(item.url.absoluteString))\">"
+                + "<i style=\"background:\(tint(for: item.url.host ?? item.url.absoluteString))\">\(escape(initial))</i>"
+                + "<span>\(escape(item.title))</span></a>"
         }.joined()
         let heading = bookmarks.isEmpty ? L("常用网站") : L("收藏夹")
-        return page(title: startTitle, body: "<h1>\(heading)</h1>\(rows)")
+        return page(title: startTitle,
+                    body: "<h1 class=\"label\">\(heading)</h1><div class=\"desktop\">\(tiles)</div>")
     }
+
+    /// A stable tile colour per site, so a bookmark keeps the same icon between launches.
+    /// Swift's own hashing is seeded per process, hence the explicit FNV-1a.
+    private static func tint(for host: String) -> String {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in host.lowercased().utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3
+        }
+        let pair = iconTints[Int(hash % UInt64(iconTints.count))]
+        return "linear-gradient(160deg, \(pair.0), \(pair.1))"
+    }
+
+    /// Muted, close to the accent red of the rest of the app.
+    private static let iconTints: [(String, String)] = [
+        ("#C2624E", "#A63C2C"), ("#7089A6", "#4E6A87"), ("#6E9284", "#4D7466"),
+        ("#A98363", "#86634A"), ("#8B7E9F", "#6C5F85"), ("#5F8C8F", "#447073"),
+    ]
 
     static func failure(url: URL?, message: String) -> String {
         let retry = url.map {
@@ -237,16 +261,31 @@ enum BrowserPages {
         \(OrielPalette.browserCSS)
         body { margin: 0; padding: 12px; font: 13px -apple-system, "PingFang SC", sans-serif; color: var(--oriel-ink); background: var(--oriel-canvas); }
         h1 { margin: 4px 0 10px; font-size: 14px; font-weight: 600; }
+        h1.label { margin: 4px 0 14px; font-size: 11px; font-weight: 600; letter-spacing: .08em;
+                   text-align: center; color: var(--oriel-muted); }
         p { margin: 0 0 12px; color: var(--oriel-muted); word-break: break-word; }
-        a { display: flex; align-items: center; gap: 8px; padding: 7px 8px; margin-bottom: 4px;
-            border-radius: 6px; color: inherit; text-decoration: none; background: var(--oriel-field); }
-        a:hover, a:active { background: var(--oriel-selection); }
+        a { color: inherit; text-decoration: none; }
         a:focus-visible { outline: 2px solid var(--oriel-accent); outline-offset: 2px; }
         ::selection { background: var(--oriel-highlight); color: var(--oriel-ink); }
-        a b { flex: none; width: 22px; height: 22px; border-radius: 5px; background: var(--oriel-selection); color: var(--oriel-accent);
-              text-align: center; line-height: 22px; font-size: 12px; }
-        a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        a.retry { justify-content: center; }
+        .desktop { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+                   gap: 14px 4px; align-content: start; }
+        .desktop a { display: flex; flex-direction: column; align-items: center; gap: 6px;
+                     padding: 2px; border-radius: 9px; }
+        .desktop a i { display: flex; align-items: center; justify-content: center; width: 46px; height: 46px;
+                       border-radius: 12px; font-style: normal; font-size: 19px; font-weight: 600;
+                       color: rgba(255,255,255,.95);
+                       box-shadow: 0 1px 2px rgba(54,54,54,.16), inset 0 1px 0 rgba(255,255,255,.18);
+                       transition: transform .15s ease, box-shadow .15s ease; }
+        .desktop a:hover i, .desktop a:active i { transform: translateY(-1px);
+                       box-shadow: 0 3px 7px rgba(54,54,54,.22), inset 0 1px 0 rgba(255,255,255,.22); }
+        .desktop a:focus-visible { outline: none; }
+        .desktop a:focus-visible i { outline: 2px solid var(--oriel-accent); outline-offset: 2px; }
+        .desktop a span { max-width: 100%; font-size: 10.5px; line-height: 1.3; text-align: center;
+                          color: var(--oriel-ink); display: -webkit-box; -webkit-box-orient: vertical;
+                          -webkit-line-clamp: 2; overflow: hidden; word-break: break-word; }
+        a.retry { display: flex; align-items: center; justify-content: center; padding: 7px 8px;
+                  border-radius: 6px; background: var(--oriel-field); }
+        a.retry:hover, a.retry:active { background: var(--oriel-selection); }
         </style></head><body>\(body)</body></html>
         """
     }

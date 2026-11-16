@@ -89,6 +89,16 @@ final class BrowserModelTests: XCTestCase {
         XCTAssertTrue(failure.contains(L("重试")))
     }
 
+    func testStartPageDrawsBookmarksAsIconTiles() throws {
+        let github = BrowserBookmark(title: "GitHub", url: try XCTUnwrap(URL(string: "https://github.com/")))
+        let wiki = BrowserBookmark(title: "维基百科", url: try XCTUnwrap(URL(string: "https://www.wikipedia.org/")))
+        let page = BrowserPages.start([github, wiki])
+        XCTAssertTrue(page.contains("class=\"desktop\""))
+        XCTAssertEqual(page.components(separatedBy: "<a href=").count - 1, 2)
+        XCTAssertTrue(page.contains(">G</i>"))
+        XCTAssertTrue(page.contains(">维</i>"))
+    }
+
     func testUserAgentChoicePersistsAndMigratesTheOldMobileSwitch() throws {
         let suite = UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
