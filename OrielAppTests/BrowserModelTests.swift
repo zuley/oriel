@@ -1,7 +1,98 @@
 import XCTest
+import WebKit
 
 @MainActor
 final class BrowserModelTests: XCTestCase {
+    func testWebKitPublishesBothDownloadsWithTheSameSuggestedName() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let finished = expectation(description: "WebKit finished both downloads")
+        finished.expectedFulfillmentCount = 2
+        var published: [URL] = []
+        let browsers = (0..<2).map { _ in
+            BrowserView(frame: .zero, downloadFolder: folder) { url in
+                published.append(url)
+                finished.fulfill()
+            }
+        }
+        defer { browsers.forEach { $0.dispose() } }
+        for (index, browser) in browsers.enumerated() {
+            let web = try XCTUnwrap(browser.subviews.compactMap { $0 as? WKWebView }.first)
+            _ = try await web.callAsyncJavaScript("""
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(new Blob([text], {type: 'text/plain'}));
+                link.download = 'report.txt';
+                document.body.append(link);
+                link.click();
+                """, arguments: ["text": "report \(index)"], in: nil, contentWorld: .page)
+        }
+        await fulfillment(of: [finished], timeout: 15)
+        XCTAssertEqual(Set(published.map(\.lastPathComponent)), ["report.txt", "report 1.txt"])
+        XCTAssertEqual(Set(try published.map { try String(contentsOf: $0, encoding: .utf8) }), ["report 0", "report 1"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path).count, 2)
+    }
+
+    func testConcurrentDownloadsPublishDistinctFilesAndCleanOnlyTheirOwnStaging() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let name = "日报.txt"
+        let files = try (0..<3).map { _ in try BrowserDownloadFile(in: folder, suggestedFilename: name) }
+        for (index, file) in files.enumerated() { try Data([UInt8(index)]).write(to: file.temporaryURL) }
+        let existing = folder.appending(path: name)
+        try Data([42]).write(to: existing)
+
+        let results = try await withThrowingTaskGroup(of: URL.self, returning: [URL].self) { group in
+            for file in files.prefix(2) {
+                group.addTask {
+                    defer { file.discardStaging() }
+                    return try file.publish()
+                }
+            }
+            var published: [URL] = []
+            for try await result in group { published.append(result) }
+            return published
+        }
+        files[2].discardStaging() // The failed or cancelled download.
+        XCTAssertEqual(Set(results.map(\.lastPathComponent)), ["日报 1.txt", "日报 2.txt"])
+        XCTAssertEqual(Set(try results.map { try Data(contentsOf: $0) }), [Data([0]), Data([1])])
+        XCTAssertEqual(try Data(contentsOf: existing), Data([42]))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path).count, 3)
+    }
+
+    func testFinishedNavigationsDoNotRearmAutomaticCrashReloads() {
+        let browser = BrowserView(frame: .zero)
+        defer { browser.dispose() }
+        let web = RecordingWebView()
+        let delegate: WKNavigationDelegate = browser
+        let termination = NSError(domain: WKError.errorDomain, code: WKError.webContentProcessTerminated.rawValue)
+        for _ in 0..<4 {
+            delegate.webView?(web, didFinish: nil)
+            browser.webView(web, didFailProvisionalNavigation: nil, withError: termination)
+            browser.webViewWebContentProcessDidTerminate(web)
+        }
+        browser.webView(web, didFail: nil, withError: URLError(.networkConnectionLost))
+        XCTAssertEqual(web.reloadCount, 2)
+        XCTAssertEqual(web.errorPages, 1)
+        browser.load(URL(string: "about:blank")!)
+        browser.webViewWebContentProcessDidTerminate(web)
+        XCTAssertEqual(web.reloadCount, 3)
+    }
+
+    private final class RecordingWebView: WKWebView {
+        var reloadCount = 0
+        var errorPages = 0
+        override func reload() -> WKNavigation? {
+            reloadCount += 1
+            return nil
+        }
+        override func loadHTMLString(_ string: String, baseURL: URL?) -> WKNavigation? {
+            errorPages += 1
+            return nil
+        }
+    }
+
     func testAddressBarLoadsWebAddressesAndSearchesEverythingElse() {
         XCTAssertEqual(BrowserAddress.resolve("https://example.com/a?b=1")?.absoluteString, "https://example.com/a?b=1")
         XCTAssertEqual(BrowserAddress.resolve("  example.com  ")?.absoluteString, "https://example.com")

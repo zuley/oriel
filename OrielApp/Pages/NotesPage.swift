@@ -80,7 +80,7 @@ final class NotesPage: TabPage {
             findInputToRestore = focusedField(in: bar)
             if findInputToRestore != nil { findInputSelection = input.selectedRange() }
         }
-        session.document.commitEditing?()
+        try? session.workspace.save(documentIDs: [noteID])
     }
 
     func windowWillConceal() {
@@ -99,7 +99,7 @@ final class NotesPage: TabPage {
             host?.openNote(session.workspace.create(), from: self); return true
         case (.command, "f"): session.find(); return true
         case (.command, "g"): session.findNext(backwards: false); return true
-        case (.command, "s"): try? session.workspace.saveAll(); return true
+        case (.command, "s"): try? session.workspace.save(documentIDs: [noteID]); return true
         default: return false
         }
     }

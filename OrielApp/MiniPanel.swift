@@ -81,9 +81,10 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             || !trackingMenus.isEmpty
     }
 
-    init(frame: CGRect, library: NovelLibrary, watchlist: StockWatchlist, preferences: AppPreferences, actions: Actions) {
+    init(frame: CGRect, library: NovelLibrary, watchlist: StockWatchlist, preferences: AppPreferences,
+         notes: NotesWorkspace = .shared, actions: Actions) {
         self.actions = actions
-        pages = PageFactory(library: library, watchlist: watchlist, notes: NotesWorkspace.shared)
+        pages = PageFactory(library: library, watchlist: watchlist, notes: notes)
         self.backgroundOpacity = preferences.backgroundOpacity
         self.contentOpacity = preferences.contentOpacity
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel, .resizable],
@@ -203,8 +204,6 @@ final class MiniPanel: NSPanel, NSWindowDelegate {
             hoveredResizeHandle?.releaseCursor()
             presented?.windowWillConceal()
             if hasEditingFocus {
-                presented?.commitEditing()
-                try? NotesWorkspace.shared.saveAll()
                 makeFirstResponder(nil)
             }
             settingsPanel.performClose(nil)

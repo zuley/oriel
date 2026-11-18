@@ -15,6 +15,18 @@ struct DataExport {
         }
     }
 
+    @MainActor
+    func export(to destination: URL, notes: NotesWorkspace, library: NovelLibrary, defaults: UserDefaults) async throws -> URL {
+        try notes.saveAll()
+        library.flushPlaces()
+        let staging = try prepare(in: destination, preferences: Self.preferences(defaults))
+        defer { try? files.removeItem(at: staging) }
+        try copyNotes(to: staging)
+        try await library.shelf.exportSnapshot(to: staging.appending(path: "Books"))
+        try Task.checkCancellation()
+        return try finish(staging)
+    }
+
     func prepare(in destination: URL, preferences: [String: Any]) throws -> URL {
         let sourcePath = source.resolvingSymlinksInPath().standardizedFileURL.path
         let destinationPath = destination.resolvingSymlinksInPath().standardizedFileURL.path

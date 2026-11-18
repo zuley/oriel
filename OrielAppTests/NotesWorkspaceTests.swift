@@ -1,8 +1,64 @@
 import XCTest
 import SwiftUI
+import OrielCore
 
 @MainActor
 final class NotesWorkspaceTests: XCTestCase {
+    func testUnusedWorkspaceDefersReadingFilesUntilFirstAccess() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = NotesWorkspace(root: root)
+        XCTAssertTrue(workspace.confirmCanClose())
+        let record = NoteRecord(id: UUID(), text: "existing note", created: Date(), updated: Date())
+        try NotesStore(root: root).save(record)
+        XCTAssertEqual(workspace.list().map(\.id), [record.id])
+        XCTAssertTrue(workspace.documents[record.id] === workspace.list().first)
+    }
+
+    func testClosingLastHomeTabLeavesOtherWindowCompositionAndAutosaveAlone() throws {
+        _ = NSApplication.shared
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suite)
+        }
+        var now: TimeInterval = 100
+        let notes = NotesWorkspace(root: root, automaticSaving: false, clock: { now })
+        let frame = NSRect(x: -4000, y: -4000, width: 280, height: 360)
+        func panel() throws -> MiniPanel {
+            let controller = WindowBehaviorController()
+            controller.create(frame: frame)
+            let panel = MiniPanel(frame: frame, library: NovelLibrary(root: root.appending(path: "Books"), defaults: defaults),
+                watchlist: StockWatchlist(defaults: defaults), preferences: AppPreferences(defaults: defaults), notes: notes,
+                actions: .init(toggleLock: {}, unlock: {}, toggleAutomaticHiding: {}, recover: {}, hide: {}, close: {},
+                               frameChanged: { _ in }, geometryInteractionChanged: { _ in }))
+            panel.apply(try XCTUnwrap(controller.snapshot))
+            return panel
+        }
+        let first = try panel(), second = try panel()
+        defer { first.dispose(); second.dispose() }
+        second.openPage(.notes)
+        second.contentView?.layoutSubtreeIfNeeded()
+        let note = try XCTUnwrap((second.selected.current as? NotesPage)?.session.document)
+        let editor = try XCTUnwrap(note.editorView?.documentView as? NotesTextView)
+        let selection = NSRange(location: NSNotFound, length: 0)
+        editor.insertText("正文", replacementRange: selection)
+        editor.setMarkedText("拼音", selectedRange: NSRange(location: 2, length: 0), replacementRange: selection)
+        let oldNumber = first.selected.number
+        now = 100.2
+        first.closeTab(number: oldNumber)
+        XCTAssertNotEqual(first.selected.number, oldNumber)
+        XCTAssertTrue(editor.hasMarkedText())
+        XCTAssertTrue(note.isDirty)
+        XCTAssertNil(NotesWorkspace(root: root).documents[note.id])
+        now = 100.31
+        try notes.saveIfDue()
+        XCTAssertEqual(NotesWorkspace(root: root).documents[note.id]?.text, "正文")
+        XCTAssertTrue(editor.hasMarkedText())
+    }
+
     func testClosingOnlyOwnedNotesIgnoresOtherSaveFailures() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -14,18 +70,18 @@ final class NotesWorkspaceTests: XCTestCase {
         let blockedBackup = root.appending(path: a.id.uuidString + ".json.backup")
         try FileManager.default.createDirectory(at: blockedBackup, withIntermediateDirectories: false)
         a.edit("A 未保存"); b.edit("B 最新正文")
-        XCTAssertNoThrow(try workspace.saveForClosing([]))
-        XCTAssertNoThrow(try workspace.saveForClosing([b.id]))
+        XCTAssertNoThrow(try workspace.save(documentIDs: []))
+        XCTAssertNoThrow(try workspace.save(documentIDs: [b.id]))
         XCTAssertTrue(a.isDirty)
         XCTAssertFalse(b.isDirty)
         XCTAssertEqual(NotesWorkspace(root: root).documents[b.id]?.text, "B 最新正文")
-        XCTAssertThrowsError(try workspace.saveForClosing([a.id]))
+        XCTAssertThrowsError(try workspace.save(documentIDs: [a.id]))
         XCTAssertEqual(a.text, "A 未保存")
         XCTAssertTrue(a.isDirty)
-        XCTAssertNoThrow(try workspace.saveForClosing([b.id]))
+        XCTAssertNoThrow(try workspace.save(documentIDs: [b.id]))
         XCTAssertThrowsError(try workspace.saveAll()) // Application quit still checks every note.
         try FileManager.default.removeItem(at: blockedBackup)
-        try workspace.saveForClosing([a.id])
+        try workspace.save(documentIDs: [a.id])
         XCTAssertEqual(NotesWorkspace(root: root).documents[a.id]?.text, "A 未保存")
     }
 
@@ -39,7 +95,8 @@ final class NotesWorkspaceTests: XCTestCase {
         a.edit("另一窗口已提交的正文")
         b.edit("待关闭的正文")
         now = 100.1
-        try workspace.saveForClosing([b.id])
+        b.commitEditing = { [weak b] in _ = b?.edit("刚结束的组字") }
+        try workspace.save(documentIDs: [b.id])
         XCTAssertTrue(a.isDirty)
         XCTAssertFalse(b.isDirty)
         now = 100.31

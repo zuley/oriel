@@ -176,7 +176,7 @@ struct NotesView: View {
         VStack(spacing: 0) {
             searchPill
                 .padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 5)
-            rows(compact: false)
+            rows(workspace.list(query: session.query, trash: session.showingTrash), compact: false)
         }
     }
 
@@ -184,7 +184,8 @@ struct NotesView: View {
     /// same rows. The count has its own line so it stays visible at every drawer
     /// width; narrow drawers also drop the preview line in each row.
     private func sidebar(panelWidth: CGFloat) -> some View {
-        VStack(spacing: 0) {
+        let documents = workspace.list(query: session.query, trash: session.showingTrash)
+        return VStack(spacing: 0) {
             HStack(spacing: 5) {
                 Text(session.showingTrash ? L("回收站") : L("便签"))
                     .font(.system(size: 12, weight: .semibold)).lineLimit(1)
@@ -194,14 +195,14 @@ struct NotesView: View {
             }
             .padding(.leading, 8).padding(.trailing, 2)
             .frame(height: 26)
-            Text(L10n.plural(workspace.list(query: session.query, trash: session.showingTrash).count, "%@ 张"))
+            Text(L10n.plural(documents.count, "%@ 张"))
                 .font(.system(size: 9)).foregroundStyle(OrielPalette.mutedText)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8).padding(.bottom, 4)
             searchPill
                 .padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 5)
-            rows(compact: panelWidth < 150)
+            rows(documents, compact: panelWidth < 150)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(nsColor: OrielPalette.sidebar))
@@ -209,9 +210,8 @@ struct NotesView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, x: 1, y: 0)
     }
 
-    private func rows(compact: Bool) -> some View {
-        let documents = workspace.list(query: session.query, trash: session.showingTrash)
-        return ScrollView {
+    private func rows(_ documents: [NoteDocument], compact: Bool) -> some View {
+        ScrollView {
             LazyVStack(spacing: 1) {
                 if workspace.loadError != nil { recoveryRow }
                 ForEach(documents) { document in
@@ -327,7 +327,7 @@ struct NotesView: View {
 
     @ViewBuilder private var menuItems: some View {
         if let error = session.document.errorMessage {
-            if session.document.isDirty { Button(L("重试保存")) { try? workspace.saveAll() } }
+            if session.document.isDirty { Button(L("重试保存")) { try? workspace.save(documentIDs: [session.document.id]) } }
             Button(L("查看错误")) {
                 let alert = NSAlert()
                 alert.window.level = .statusBar
@@ -460,7 +460,7 @@ private struct NoteStatus: View {
                             Text(document.isDirty ? L("未保存") : L("操作未完成")).fontWeight(.medium)
                             Text(error).font(.system(size: 11)).fixedSize(horizontal: false, vertical: true)
                             if document.isDirty {
-                                Button(L("重试保存")) { do { try workspace.saveAll(); details = false } catch {} }
+                                Button(L("重试保存")) { do { try workspace.save(documentIDs: [document.id]); details = false } catch {} }
                             } else {
                                 Button(L("知道了")) { document.errorMessage = nil; details = false }
                             }

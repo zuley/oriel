@@ -7,7 +7,7 @@ extension MiniPanel {
     private var tabs: [WindowTab] { windowTabs.tabs }
 
     func confirmCanClose() -> Bool {
-        NotesWorkspace.shared.confirmCanClose(documentIDs: Set(tabs.compactMap { $0.notes?.noteID }))
+        pages.notes.confirmCanClose(documentIDs: Set(tabs.compactMap { $0.notes?.noteID }))
     }
 
     func refreshTabs() {
@@ -24,7 +24,7 @@ extension MiniPanel {
 
     private func observeNoteTitles() {
         guard noteChanges == nil else { return }
-        noteChanges = NotesWorkspace.shared.objectWillChange.sink { [weak self] in
+        noteChanges = pages.notes.objectWillChange.sink { [weak self] in
             guard let self, !isDisposed, !noteRefreshPending else { return }
             noteRefreshPending = true
             // One refresh per window/run-loop turn, after published records are updated.
@@ -106,7 +106,7 @@ extension MiniPanel {
     private func performCloseTab(number: Int) {
         guard canManageTabs, let tab = windowTabs.tab(number: number) else { return }
         let noteIDs = Set([tab.notes?.noteID].compactMap { $0 })
-        guard NotesWorkspace.shared.confirmCanClose(documentIDs: noteIDs),
+        guard pages.notes.confirmCanClose(documentIDs: noteIDs),
               let removal = windowTabs.remove(number: number) else { return }
         switch removal.next {
         case .background:
@@ -122,9 +122,8 @@ extension MiniPanel {
 
     private func activate(_ tab: WindowTab) {
         let page = tab.current
-        presented?.commitEditing()
-        if let presented, presented !== page { presented.willDeactivate() }
-        try? NotesWorkspace.shared.saveAll()
+        if presented === page { presented?.commitEditing() }
+        else { presented?.willDeactivate() }
         makeFirstResponder(nil)
         windowTabs.select(tab)
         presented = page
@@ -218,7 +217,7 @@ extension MiniPanel {
 
     func revealUnsavedNote() {
         guard canManageTabs,
-              let document = NotesWorkspace.shared.list().first(where: { $0.isDirty && $0.errorMessage != nil }) else { return }
+              let document = pages.notes.list().first(where: { $0.isDirty && $0.errorMessage != nil }) else { return }
         if let existing = tabs.first(where: { $0.notes?.noteID == document.id }) {
             showNotes(in: existing)
         } else {

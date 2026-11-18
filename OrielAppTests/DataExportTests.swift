@@ -1,6 +1,34 @@
 import XCTest
 
 final class DataExportTests: XCTestCase {
+    @MainActor
+    func testExportCapturesPendingOffsetAndPreservesReadingOrder() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let source = root.appending(path: "source")
+        let library = NovelLibrary(root: source.appending(path: "Books"), defaults: defaults, placeDelay: .seconds(60))
+        let a = try await library.shelf.add(data: Data(String(repeating: "A", count: 500).utf8), name: "A.txt")
+        let b = try await library.shelf.add(data: Data("B".utf8), name: "B.txt")
+        try await library.refresh()
+        library.savePlace(book: a.id, chapter: 0, offset: 0)
+        library.savePlace(book: a.id, chapter: 0, offset: 400)
+        let readAt = try XCTUnwrap(library.place(for: a.id).updated)
+        library.savePlace(book: b.id, chapter: 0, offset: 0)
+        let export = try await DataExport(source: source).export(to: root, notes: NotesWorkspace(root: source.appending(path: "Notes")),
+                                                                  library: library, defaults: defaults)
+        let plist = try Data(contentsOf: export.appending(path: "preferences.plist"))
+        let values = try XCTUnwrap(PropertyListSerialization.propertyList(from: plist, format: nil) as? [String: Any])
+        let place = try XCTUnwrap(values["novel.place.v1." + a.id] as? [String: Any])
+        XCTAssertEqual(place["offset"] as? Int, 400)
+        XCTAssertEqual(library.places.place(for: a.id).updated, readAt)
+        XCTAssertEqual(library.recent.map(\.id), [b.id, a.id])
+    }
+
     func testExportPublishesReadableSnapshotWithoutOverwritingEarlierExport() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

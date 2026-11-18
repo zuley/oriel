@@ -62,7 +62,7 @@ final class NovelLibrary: ObservableObject {
         placeFlush = nil
         let pending = pendingPlaces
         pendingPlaces = [:]
-        for (book, place) in pending { places.save(book: book, chapter: place.chapter, offset: place.offset) }
+        for (book, place) in pending { places.save(place, for: book) }
     }
 
     func refresh() async throws {

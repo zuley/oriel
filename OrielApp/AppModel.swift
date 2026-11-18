@@ -103,13 +103,6 @@ final class AppModel: ObservableObject {
     }
 
     func exportData(to destination: URL) async throws -> URL {
-        try NotesWorkspace.shared.saveAll()
-        let exporter = DataExport(source: dataDirectory)
-        let staging = try exporter.prepare(in: destination, preferences: DataExport.preferences(.standard))
-        defer { try? FileManager.default.removeItem(at: staging) }
-        try exporter.copyNotes(to: staging)
-        try await library.shelf.exportSnapshot(to: staging.appending(path: "Books"))
-        try Task.checkCancellation()
-        return try exporter.finish(staging)
+        try await DataExport(source: dataDirectory).export(to: destination, notes: .shared, library: library, defaults: .standard)
     }
 }

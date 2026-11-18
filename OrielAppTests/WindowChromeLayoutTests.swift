@@ -10,6 +10,22 @@ final class WindowChromeLayoutTests: XCTestCase {
             drag: { _ in }))
     }
 
+    private func waitForControls(_ message: String, file: StaticString = #filePath, line: UInt = #line,
+                                 until condition: () -> Bool) {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while !condition() && ContinuousClock.now < deadline {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        }
+        XCTAssertTrue(condition(), message, file: file, line: line)
+    }
+
+    private func waitForControlsTransition(_ overflow: NSView, file: StaticString = #filePath, line: UInt = #line) {
+        // The completion handler removes the fade after applying the final layout.
+        waitForControls("Window controls did not finish animating", file: file, line: line) {
+            overflow.layer?.animation(forKey: "oriel.overflowFade") == nil
+        }
+    }
+
     func testToolbarAndTabSpaceRemainStableAcrossContentLockAndResize() {
         let chrome = makeChrome()
         chrome.frame = NSRect(x: 0, y: 0, width: 280, height: 360)
@@ -324,7 +340,7 @@ final class WindowChromeLayoutTests: XCTestCase {
 
         overflow.performClick(nil)
         XCTAssertFalse(chrome.windowButton.isHidden)
-        XCTAssertFalse(overflow.isHidden)
+        XCTAssertEqual(overflow.isHidden, NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         overflow.performClick(nil)
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             XCTAssertTrue(chrome.windowButton.isHidden)
@@ -333,7 +349,7 @@ final class WindowChromeLayoutTests: XCTestCase {
         }
         XCTAssertFalse(chrome.windowButton.isHidden)
         overflow.performClick(nil)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.22))
+        waitForControlsTransition(overflow)
         XCTAssertTrue(overflow.isHidden)
         XCTAssertFalse(chrome.windowButton.isHidden)
         XCTAssertEqual(chrome.windowButton.alphaValue, 1)
@@ -342,7 +358,7 @@ final class WindowChromeLayoutTests: XCTestCase {
 
         overflow.performClick(nil)
         XCTAssertFalse(chrome.windowButton.isHidden)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.22))
+        waitForControlsTransition(overflow)
         XCTAssertFalse(overflow.isHidden)
         XCTAssertTrue(chrome.windowButton.isHidden)
         XCTAssertEqual(chrome.windowButton.alphaValue, 1)
@@ -367,17 +383,17 @@ final class WindowChromeLayoutTests: XCTestCase {
 
         overflow.performClick(nil)
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-            let presentedWidth = title.layer?.presentation()?.bounds.width ?? title.frame.width
-            XCTAssertGreaterThan(presentedWidth, 80)
-            XCTAssertLessThan(presentedWidth, restingWidth)
+            waitForControls("The title should narrow as the controls expand") {
+                let width = title.layer?.presentation()?.bounds.width ?? title.frame.width
+                return width > 80 && width < restingWidth
+            }
         }
-        RunLoop.current.run(until: Date().addingTimeInterval(0.18))
+        waitForControlsTransition(overflow)
         let expandedWidth = title.frame.width
         XCTAssertLessThan(expandedWidth, restingWidth)
 
         overflow.performClick(nil)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.22))
+        waitForControlsTransition(overflow)
         XCTAssertEqual(title.frame.width, restingWidth)
         XCTAssertFalse(title.isHidden)
         XCTAssertEqual(title.alphaValue, 1)
@@ -405,11 +421,11 @@ final class WindowChromeLayoutTests: XCTestCase {
             XCTAssertTrue(title.isHidden)
         } else {
             XCTAssertFalse(title.isHidden)
-            RunLoop.current.run(until: Date().addingTimeInterval(0.22))
+            waitForControlsTransition(overflow)
             XCTAssertTrue(title.isHidden)
         }
         overflow.performClick(nil)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.22))
+        waitForControlsTransition(overflow)
         XCTAssertFalse(title.isHidden)
         XCTAssertEqual(title.alphaValue, 1)
     }
@@ -437,16 +453,16 @@ final class WindowChromeLayoutTests: XCTestCase {
 
         overflow.performClick(nil)
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-            let switcherWidth = switcher.layer?.presentation()?.bounds.width ?? switcher.frame.width
-            let addX = add.layer?.presentation()?.frame.minX ?? add.frame.minX
-            XCTAssertLessThan(switcherWidth, restingWidth)
-            XCTAssertLessThan(addX, restingAddX)
+            waitForControls("The switcher and add button should move together") {
+                let width = switcher.layer?.presentation()?.bounds.width ?? switcher.frame.width
+                let x = add.layer?.presentation()?.frame.minX ?? add.frame.minX
+                return width < restingWidth && x < restingAddX
+            }
         }
-        RunLoop.current.run(until: Date().addingTimeInterval(0.18))
+        waitForControlsTransition(overflow)
         XCTAssertEqual(add.frame.minX, switcher.frame.maxX + 2)
         overflow.performClick(nil)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.22))
+        waitForControlsTransition(overflow)
         XCTAssertEqual(add.frame.minX, restingAddX)
         XCTAssertEqual(switcher.frame.width, restingWidth)
     }

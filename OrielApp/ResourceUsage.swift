@@ -88,8 +88,7 @@ enum ProcessUsageReader {
     }
 }
 
-/// Samples the windows of the management window while it is open. Offsets are
-/// small, but everything stays on the main actor and only a few processes are read.
+/// Samples per-window usage while the workspace and its resource readouts are visible.
 @MainActor
 final class ResourceSampler: ObservableObject {
     static let shared = ResourceSampler()

@@ -31,7 +31,13 @@ public struct ReadingPlaces {
     }
 
     public func save(book: String, chapter: Int, offset: Int) {
-        defaults.set(["chapter": chapter, "offset": offset, "updated": Date()], forKey: key(book))
+        save(ReadingPlace(chapter: chapter, offset: offset, updated: Date()), for: book)
+    }
+
+    public func save(_ place: ReadingPlace, for book: String) {
+        var record: [String: Any] = ["chapter": place.chapter, "offset": place.offset]
+        record["updated"] = place.updated
+        defaults.set(record, forKey: key(book))
     }
 
     public func marks(for book: String) -> [ReadingMark] {

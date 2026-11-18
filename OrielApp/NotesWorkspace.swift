@@ -88,13 +88,27 @@ final class NoteDocument: ObservableObject, Identifiable {
 final class NotesWorkspace: ObservableObject {
     static let shared = NotesWorkspace(root: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appending(path: Bundle.main.bundleIdentifier ?? "app.oriel.mac").appending(path: "Notes"))
-    @Published private(set) var documents: [UUID: NoteDocument] = [:]
-    @Published private(set) var loadError: String?
+    @Published private var loadedDocuments: [UUID: NoteDocument] = [:]
+    @Published private var recoveryNotice: String?
+    private var hasLoaded = false
+
+    var documents: [UUID: NoteDocument] {
+        loadIfNeeded()
+        return loadedDocuments
+    }
+    var loadError: String? {
+        loadIfNeeded()
+        return recoveryNotice
+    }
     private let store: NotesStore
     private let automaticSaving: Bool
     private let clock: () -> TimeInterval
-    private var firstEdit: TimeInterval?
-    private var lastEdit: TimeInterval?
+    private struct PendingEdit {
+        let first: TimeInterval
+        var last: TimeInterval
+        var deadline: TimeInterval { min(last + 0.3, first + 2) }
+    }
+    private var pending: [UUID: PendingEdit] = [:]
     private var saveTimer: Timer?
     private var saving = false
     private var confirmingClose = false
@@ -104,38 +118,53 @@ final class NotesWorkspace: ObservableObject {
         self.clock = clock
         store = NotesStore(root: root)
         self.automaticSaving = automaticSaving
+    }
+
+    /// Menu-bar startup and windows without notes only register callbacks.
+    private func loadIfNeeded() {
+        guard !hasLoaded else { return }
+        hasLoaded = true
         do {
             let loaded = try store.load()
-            for record in loaded.records { attach(NoteDocument(record: record, persisted: true)) }
-            loadError = loaded.issues.isEmpty ? nil : loaded.issues.joined(separator: "\n")
-        } catch { loadError = NotesError.message(error) }
+            var documents: [UUID: NoteDocument] = [:]
+            for record in loaded.records {
+                let document = NoteDocument(record: record, persisted: true)
+                observeEdits(to: document)
+                documents[document.id] = document
+            }
+            loadedDocuments = documents
+            recoveryNotice = loaded.issues.isEmpty ? nil : loaded.issues.joined(separator: "\n")
+        } catch { recoveryNotice = NotesError.message(error) }
     }
 
     func create() -> NoteDocument {
+        loadIfNeeded()
         let now = Date()
         let document = NoteDocument(record: .init(id: UUID(), text: "", created: now, updated: now), persisted: false)
-        attach(document)
+        observeEdits(to: document)
+        loadedDocuments[document.id] = document
         return document
     }
 
     func discardEmptyDraft(_ document: NoteDocument) {
         guard !document.isPersisted, !document.isDirty else { return }
-        documents.removeValue(forKey: document.id)
+        loadedDocuments.removeValue(forKey: document.id)
+        pending.removeValue(forKey: document.id)
         document.changed = nil
     }
 
-    func acknowledgeRecovery() { loadError = nil }
+    func acknowledgeRecovery() { recoveryNotice = nil }
 
     func revealStorage() { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: store.root.path) }
 
     func confirmCanClose(documentIDs: Set<UUID>? = nil) -> Bool {
-        if documentIDs?.isEmpty == true { return true }
+        if !hasLoaded || documentIDs?.isEmpty == true { return true }
         guard !confirmingClose else { return false }
         confirmingClose = true
         defer { confirmingClose = false }
         while true {
             do {
-                if let documentIDs { try saveForClosing(documentIDs) }
+                if let documentIDs { try save(documentIDs: documentIDs) }
                 else { try saveAll() }
                 return true
             }
@@ -152,15 +181,14 @@ final class NotesWorkspace: ObservableObject {
         }
     }
 
-    private func attach(_ document: NoteDocument) {
-        documents[document.id] = document
+    private func observeEdits(to document: NoteDocument) {
         document.changed = { [weak self, weak document] in
-            guard let self else { return }
+            guard let self, let document else { return }
             // The editor and its status dot observe the document itself; the workspace
             // (lists, tab titles in every window) only needs title and saved-state changes.
-            if document?.lastEditChangedListing != false { objectWillChange.send() }
-            firstEdit = firstEdit ?? clock()
-            lastEdit = clock()
+            if document.lastEditChangedListing { objectWillChange.send() }
+            let now = clock()
+            pending[document.id, default: PendingEdit(first: now, last: now)].last = now
             scheduleSave()
         }
     }
@@ -196,6 +224,7 @@ final class NotesWorkspace: ObservableObject {
         do {
             try store.save(record)
             document.accept(record)
+            pending.removeValue(forKey: document.id)
             objectWillChange.send()
         } catch {
             document.errorMessage = NotesError.message(error)
@@ -205,8 +234,8 @@ final class NotesWorkspace: ObservableObject {
 
     private func scheduleSave() {
         saveTimer?.invalidate()
-        guard automaticSaving, !saving, let firstEdit, let lastEdit else { return }
-        let due = min(lastEdit + 0.3, firstEdit + 2)
+        saveTimer = nil
+        guard automaticSaving, !saving, let due = pending.values.map(\.deadline).min() else { return }
         let timer = Timer(timeInterval: max(0.001, due - clock()), repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
@@ -218,39 +247,46 @@ final class NotesWorkspace: ObservableObject {
     }
 
     func saveIfDue() throws {
-        guard let firstEdit, let lastEdit else { return }
-        if clock() >= min(lastEdit + 0.3, firstEdit + 2) {
-            try save(commitEditing: false)
-        } else { scheduleSave() }
+        let now = clock()
+        let due = Set(pending.compactMap { id, edit in edit.deadline <= now ? id : nil })
+        guard !due.isEmpty else { scheduleSave(); return }
+        try save(commitEditing: false, documentIDs: due)
     }
 
-    func saveAll() throws { try save(commitEditing: true) }
+    func saveAll() throws {
+        loadIfNeeded()
+        try save(commitEditing: true)
+    }
 
-    func saveForClosing(_ documentIDs: Set<UUID>) throws {
+    func save(documentIDs: Set<UUID>) throws {
         try save(commitEditing: true, documentIDs: documentIDs)
     }
 
     private func save(commitEditing: Bool, documentIDs: Set<UUID>? = nil) throws {
-        if documentIDs?.isEmpty == true { return }
-        guard !saving else { return }
+        guard hasLoaded, !saving, documentIDs?.isEmpty != true else { return }
         saving = true
         defer {
             saving = false
-            // Closing one document must not discard the pending save of another.
-            if documentIDs != nil { scheduleSave() }
+            scheduleSave()
         }
         saveTimer?.invalidate()
         saveTimer = nil
-        let targets = documents.values.filter { documentIDs?.contains($0.id) ?? true }
+        let targets = documentIDs.map { ids in ids.compactMap { loadedDocuments[$0] } } ?? Array(loadedDocuments.values)
         if commitEditing { for document in targets { document.commitEditing?() } }
         var failure: Error?
-        for document in targets where document.isDirty {
-            do { try store.save(document.record); document.saved() }
-            catch { document.errorMessage = NotesError.message(error); failure = failure ?? error }
-        }
-        if documentIDs == nil {
-            firstEdit = nil
-            lastEdit = nil
+        for document in targets {
+            do {
+                if document.isDirty {
+                    try store.save(document.record)
+                    document.saved()
+                }
+                pending.removeValue(forKey: document.id)
+            } catch {
+                // A failed scheduled write waits for an edit or explicit retry.
+                if !commitEditing { pending.removeValue(forKey: document.id) }
+                document.errorMessage = NotesError.message(error)
+                failure = failure ?? error
+            }
         }
         objectWillChange.send()
         if let failure { throw failure }
@@ -275,8 +311,7 @@ final class NotesSession: ObservableObject {
     }
 
     func select(_ document: NoteDocument) {
-        self.document.commitEditing?()
-        try? workspace.saveAll()
+        try? workspace.save(documentIDs: [self.document.id])
         let previous = self.document
         if previous.id != document.id { previous.releaseEditor() }
         self.document = document
@@ -287,8 +322,7 @@ final class NotesSession: ObservableObject {
     }
 
     func showList() {
-        document.commitEditing?()
-        try? workspace.saveAll()
+        try? workspace.save(documentIDs: [document.id])
         showingList = true
         showingTrash = false
         focusSearch?()

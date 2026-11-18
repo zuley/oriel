@@ -15,6 +15,8 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     private let webView: WKWebView
     private let bookmarks: BrowserBookmarks
     private let defaults: UserDefaults
+    private let downloadFolder: URL?
+    private let revealDownload: (URL) -> Void
     private let backButton: ToolbarButton
     private let forwardButton: ToolbarButton
     private let reloadButton: ToolbarButton
@@ -27,10 +29,14 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     private var addressEditing = false
     private var typedAddress = ""
     private var pageEditing = false
-    private var crashReloads = 0
+    private enum ProcessRecovery {
+        case browsing(reloads: Int)
+        case stopped
+    }
+    private var recovery = ProcessRecovery.browsing(reloads: 0)
     private let scriptHandler = EditingScriptHandler()
     private var observations: [NSKeyValueObservation] = []
-    private var downloads: [ObjectIdentifier: (download: WKDownload, destination: URL)] = [:]
+    private var downloads: [ObjectIdentifier: (download: WKDownload, file: BrowserDownloadFile?)] = [:]
     private var errorURL: URL?
     private var reportedTitle = ""
     private var isDisposed = false
@@ -59,9 +65,13 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     /// True while text is being typed in the address bar or in a field inside the page.
     var hasEditingFocus: Bool { isEditingAddress || pageEditing }
 
-    init(frame: NSRect, bookmarks: BrowserBookmarks = .shared, defaults: UserDefaults = .standard) {
+    init(frame: NSRect, bookmarks: BrowserBookmarks = .shared, defaults: UserDefaults = .standard,
+         downloadFolder: URL? = nil,
+         revealDownload: @escaping (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }) {
         self.bookmarks = bookmarks
         self.defaults = defaults
+        self.downloadFolder = downloadFolder
+        self.revealDownload = revealDownload
         userAgent = BrowserUserAgent.load(from: defaults)
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
@@ -278,13 +288,18 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
 
     // MARK: Commands
 
-    func load(_ url: URL) {
+    private func beginUserNavigation() {
+        recovery = .browsing(reloads: 0)
         errorURL = nil
+    }
+
+    func load(_ url: URL) {
+        beginUserNavigation()
         webView.load(URLRequest(url: url))
     }
 
     func showStartPage() {
-        errorURL = nil
+        beginUserNavigation()
         webView.loadHTMLString(BrowserPages.start(bookmarks.items), baseURL: nil)
     }
 
@@ -300,8 +315,16 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     /// Called when the page is no longer on screen so it stops playing in the background.
     func pauseMedia() { webView.pauseAllMediaPlayback {} }
 
-    func goBack() { webView.goBack() }
-    func goForward() { webView.goForward() }
+    func goBack() {
+        guard canGoBack else { return }
+        beginUserNavigation()
+        webView.goBack()
+    }
+    func goForward() {
+        guard canGoForward else { return }
+        beginUserNavigation()
+        webView.goForward()
+    }
 
     func reload() {
         if let errorURL {
@@ -309,6 +332,7 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         } else if webView.url == nil || webView.url?.scheme == "about" {
             showStartPage()
         } else {
+            beginUserNavigation()
             webView.reload()
         }
     }
@@ -352,7 +376,10 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         webView.configuration.userContentController.removeScriptMessageHandler(forName: EditingScriptHandler.name)
         scriptHandler.onChange = nil
         addressField.delegate = nil
-        for entry in downloads.values { entry.download.cancel { _ in } }
+        for entry in downloads.values {
+            entry.download.delegate = nil
+            entry.download.cancel { [file = entry.file] _ in file?.discardStaging() }
+        }
         downloads.removeAll()
         webView.removeFromSuperview()
         removeFromSuperview()
@@ -529,10 +556,15 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
                  preferences: WKWebpagePreferences) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
         preferences.preferredContentMode = userAgent.usesMobileContent ? .mobile : .desktop
         guard let url = navigationAction.request.url else { return (.cancel, preferences) }
-        if navigationAction.navigationType != .other { errorURL = nil }
         if navigationAction.shouldPerformDownload { return (.download, preferences) }
         switch url.scheme?.lowercased() {
         case "http", "https", "about", "blob":
+            if navigationAction.targetFrame?.isMainFrame == true {
+                switch navigationAction.navigationType {
+                case .linkActivated, .formSubmitted, .formResubmitted, .backForward: beginUserNavigation()
+                default: break
+                }
+            }
             return (.allow, preferences)
         case "data":
             // A page may embed data: resources, but cannot send the whole tab to one.
@@ -549,10 +581,16 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
-        download.delegate = self
+        receive(download)
     }
 
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        receive(download)
+    }
+
+    private func receive(_ download: WKDownload) {
+        guard !isDisposed else { download.cancel { _ in }; return }
+        downloads[ObjectIdentifier(download)] = (download, nil)
         download.delegate = self
     }
 
@@ -560,32 +598,33 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
         pageEditing = false
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { crashReloads = 0 }
-
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        showFailure(error)
+        showFailure(error, in: webView)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        showFailure(error)
+        showFailure(error, in: webView)
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         pageEditing = false
-        // A page that keeps crashing must not reload forever.
-        guard crashReloads < 2 else {
-            let failing = webView.url
-            errorURL = failing
-            webView.loadHTMLString(BrowserPages.failure(url: failing, message: L("网页反复崩溃，已停止自动重新加载。")), baseURL: failing)
+        guard !isDisposed, case .browsing(let reloads) = recovery else { return }
+        if reloads < 2 {
+            recovery = .browsing(reloads: reloads + 1)
+            webView.reload()
             return
         }
-        crashReloads += 1
-        webView.reload()
+        recovery = .stopped
+        let failing = webView.url
+        errorURL = failing
+        webView.loadHTMLString(BrowserPages.failure(url: failing, message: L("网页反复崩溃，已停止自动重新加载。")), baseURL: failing)
     }
 
-    private func showFailure(_ error: Error) {
+    private func showFailure(_ error: Error, in webView: WKWebView) {
+        guard !isDisposed, case .browsing = recovery else { return }
         let nsError = error as NSError
-        // Cancelled loads (a new navigation, or the download handoff) are not failures.
+        // A termination is already handled by process recovery, even if the load also fails.
+        if nsError.domain == WKError.errorDomain && nsError.code == WKError.webContentProcessTerminated.rawValue { return }
         let cancelled = nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
         let handedOff = nsError.domain == "WebKitErrorDomain" && nsError.code == 102
         guard !cancelled, !handedOff else { return }
@@ -599,7 +638,10 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         // The small window has no room for pop-ups; open them in place.
-        if navigationAction.targetFrame == nil { webView.load(navigationAction.request) }
+        if navigationAction.targetFrame == nil {
+            if navigationAction.navigationType == .linkActivated { beginUserNavigation() }
+            webView.load(navigationAction.request)
+        }
         return nil
     }
 
@@ -652,33 +694,38 @@ final class BrowserView: NSView, WKNavigationDelegate, WKUIDelegate, WKDownloadD
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
                   suggestedFilename: String, completionHandler: @escaping @MainActor @Sendable (URL?) -> Void) {
-        guard let folder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else {
+        let id = ObjectIdentifier(download)
+        guard !isDisposed, downloads[id] != nil else {
             completionHandler(nil)
             return
         }
-        let proposed = (suggestedFilename as NSString).lastPathComponent
-        let name = ["", ".", ".."].contains(proposed) ? "download" : proposed
-        let base = (name as NSString).deletingPathExtension
-        let ext = (name as NSString).pathExtension
-        var destination = folder.appending(path: name)
-        var index = 1
-        while FileManager.default.fileExists(atPath: destination.path) {
-            destination = folder.appending(path: ext.isEmpty ? "\(base) \(index)" : "\(base) \(index).\(ext)")
-            index += 1
+        do {
+            let folder = try downloadFolder ?? FileManager.default.url(for: .downloadsDirectory, in: .userDomainMask,
+                                                                       appropriateFor: nil, create: true)
+            let file = try BrowserDownloadFile(in: folder, suggestedFilename: suggestedFilename)
+            downloads[id]?.file = file
+            completionHandler(file.temporaryURL)
+        } catch {
+            downloads.removeValue(forKey: id)
+            completionHandler(nil)
+            inform(L("下载失败"), error.localizedDescription)
         }
-        downloads[ObjectIdentifier(download)] = (download, destination)
-        completionHandler(destination)
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        guard let entry = downloads.removeValue(forKey: ObjectIdentifier(download)) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([entry.destination])
+        guard let file = downloads.removeValue(forKey: ObjectIdentifier(download))?.file else { return }
+        defer { file.discardStaging() }
+        do {
+            revealDownload(try file.publish())
+        } catch {
+            inform(L("下载失败"), L("%@：%@", file.filename, error.localizedDescription))
+        }
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         guard let entry = downloads.removeValue(forKey: ObjectIdentifier(download)) else { return }
-        try? FileManager.default.removeItem(at: entry.destination)
-        inform(L("下载失败"), L("%@：%@", entry.destination.lastPathComponent, error.localizedDescription))
+        entry.file?.discardStaging()
+        inform(L("下载失败"), entry.file.map { L("%@：%@", $0.filename, error.localizedDescription) } ?? error.localizedDescription)
     }
 }
 
@@ -798,9 +845,7 @@ private final class EditingScriptHandler: NSObject, WKScriptMessageHandler {
 
     var onChange: ((Bool) -> Void)?
 
-    nonisolated func userContentController(_ userContentController: WKUserContentController,
-                                           didReceive message: WKScriptMessage) {
-        let editing = (message.body as? Bool) ?? false
-        MainActor.assumeIsolated { onChange?(editing) }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        onChange?(message.body as? Bool ?? false)
     }
 }
